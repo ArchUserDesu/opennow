@@ -69,8 +69,8 @@ jobs:
           $body = @"
           Latest XDK build status: **$status**
 
-          Run ID: `$runId`
-          Commit: `${{ github.sha }}`
+          Run ID: $runId
+          Commit: ${{ github.sha }}
           Run: $runUrl
 
           Last 160 lines of the build log:
