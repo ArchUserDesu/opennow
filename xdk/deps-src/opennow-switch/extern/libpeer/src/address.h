@@ -2,20 +2,29 @@
 #define ADDRESS_H_
 
 #include "config.h"
-#if CONFIG_USE_LWIP
+#if defined(_XBOX)
+#include <winsockx.h>
+#elif CONFIG_USE_LWIP
 #include <lwip/sockets.h>
 #else
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #endif
 #include <stdint.h>
+#include <stddef.h>
 
+#if defined(_XBOX)
+#define ADDRSTRLEN 16
+#else
 #define ADDRSTRLEN INET6_ADDRSTRLEN
+#endif
 
 typedef struct Address {
   uint8_t family;
   struct sockaddr_in sin;
+#if !defined(_XBOX)
   struct sockaddr_in6 sin6;
+#endif
   uint16_t port;
 } Address;
 
