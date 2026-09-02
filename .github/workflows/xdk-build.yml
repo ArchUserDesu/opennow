@@ -1,0 +1,47 @@
+﻿name: XDK Build
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-xex:
+    runs-on:
+      - self-hosted
+      - Windows
+      - X64
+      - xdk
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build XEX
+        shell: powershell
+        run: |
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File .\xdk\build-port.ps1 `
+            -Configuration Release `
+            -XdkRoot "C:\Program Files (x86)\Microsoft Xbox 360 SDK" `
+            *>&1 | Tee-Object -FilePath xdk-build.log
+
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xdk-build-log
+          path: xdk-build.log
+
+      - name: Upload XEX
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opennow-xex
+          path: |
+            xdk/bin/Release/default.xex
+            xdk/bin/Release/cacert.pem
