@@ -94,7 +94,10 @@ function Build-StaticProject([string]$ProjectPath, [string]$OutputName) {
   $objects = @()
   $common = @('/nologo','/c','/W3','/GS-')
   if ($Configuration -eq 'Release') { $common += @('/O2','/Oi','/Ot','/MT') } else { $common += @('/Od','/MTd','/Zi') }
-  if ($OutputName -eq 'mbedtls_opennow') { $common += '/TP' }
+  # mbedTLS and libpeer contain modern declarations that the XDK's C89 frontend
+  # cannot parse.  Compile those archives through the same XDK C++ frontend;
+  # libpeer gets C allocation bridging from opennow_xdk_compat.h.
+  if ($OutputName -eq 'mbedtls_opennow' -or $OutputName -eq 'peer') { $common += '/TP' }
   elseif (([string]$compile.CompileAs) -eq 'CompileAsC') { $common += '/TC' }
   foreach ($inc in $includes) { $common += "/I$inc" }
   foreach ($def in $defines) { $common += ('/D' + $def.Replace('"','\"')) }
