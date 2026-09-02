@@ -64,10 +64,19 @@ int addr_from_string(const char* buf, Address* addr) {
 
 int addr_to_string(const Address* addr, char* buf, size_t len) {
 #if defined(_XBOX)
-  const char* text = inet_ntoa(addr->sin.sin_addr);
-  if (!text || len == 0) return 0;
-  strncpy(buf, text, len - 1);
-  buf[len - 1] = '\0';
+  unsigned long host;
+  int written;
+  if (!addr || !buf || len == 0) return 0;
+  host = ntohl(addr->sin.sin_addr.s_addr);
+  written = snprintf(buf, len, "%u.%u.%u.%u",
+                     (unsigned)((host >> 24) & 0xff),
+                     (unsigned)((host >> 16) & 0xff),
+                     (unsigned)((host >> 8) & 0xff),
+                     (unsigned)(host & 0xff));
+  if (written < 0 || (size_t)written >= len) {
+    buf[len - 1] = '\0';
+    return 0;
+  }
   return 1;
 #else
   memset(buf, 0, len);
