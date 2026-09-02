@@ -1,0 +1,9 @@
+xdk/obj/
+xdk/bin/
+xdk/lib/Release/
+*.obj
+*.xex
+*.xdb
+*.exe
+*.pe
+*.lib
