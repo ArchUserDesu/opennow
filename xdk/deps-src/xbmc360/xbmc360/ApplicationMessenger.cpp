@@ -1,0 +1,351 @@
+#include "ApplicationMessenger.h"
+#include "Application.h"
+#include "FileItem.h"
+#include "PlayListPlayer.h"
+#include "xbox\XBKernalExports.h"
+#include "interfaces\Builtins.h"
+#include "guilib\GUIWindowManager.h"
+
+using namespace std;
+
+CApplicationMessenger::~CApplicationMessenger()
+{
+	Cleanup();
+}
+
+void CApplicationMessenger::Cleanup()
+{
+	CSingleLock lock (m_critSection);
+
+	while (m_vecMessages.size() > 0)
+	{
+		ThreadMessage* pMsg = m_vecMessages.front();
+
+		if (pMsg->hWaitEvent)
+			SetEvent(pMsg->hWaitEvent);
+
+		delete pMsg;
+		m_vecMessages.pop();
+	}
+
+	while (m_vecWindowMessages.size() > 0)
+	{
+		ThreadMessage* pMsg = m_vecWindowMessages.front();
+
+		if (pMsg->hWaitEvent)
+			SetEvent(pMsg->hWaitEvent);
+
+		delete pMsg;
+		m_vecWindowMessages.pop();
+	}
+}
+
+void CApplicationMessenger::SendMessage(ThreadMessage& message, bool wait)
+{
+	message.hWaitEvent = NULL;
+
+	if (wait)
+	{
+		// Check that we're not being called from our application thread, else we'll be waiting
+		// forever!
+		if (!g_application.IsCurrentThread())
+			message.hWaitEvent = CreateEvent(NULL, true, false, NULL);
+		else
+		{
+			ProcessMessage(&message);
+			return;
+		}
+	}
+
+	CSingleLock lock (m_critSection);
+
+	if (g_application.IsStopping())
+	{
+		if (message.hWaitEvent)
+		{
+			CloseHandle(message.hWaitEvent);
+			message.hWaitEvent = NULL;
+		}
+		return;
+	}
+
+	ThreadMessage* msg = new ThreadMessage();
+	msg->dwMessage = message.dwMessage;
+	msg->dwParam1 = message.dwParam1;
+	msg->dwParam2 = message.dwParam2;
+	msg->hWaitEvent = message.hWaitEvent;
+	msg->lpVoid = message.lpVoid;
+	msg->strParam = message.strParam;
+
+	if (msg->dwMessage == TMSG_DIALOG_DOMODAL/* ||
+      msg->dwMessage == TMSG_WRITE_SCRIPT_OUTPUT*/) // TODO
+	{
+		m_vecWindowMessages.push(msg);
+	}
+	else m_vecMessages.push(msg);
+
+	lock.Leave();
+
+	if (message.hWaitEvent)
+	{
+		WaitForSingleObject(message.hWaitEvent, INFINITE);
+		CloseHandle(message.hWaitEvent);
+		message.hWaitEvent = NULL;
+	}
+}
+
+void CApplicationMessenger::ProcessMessages()
+{
+	// Process threadmessages
+	CSingleLock lock (m_critSection);
+
+	while (m_vecMessages.size() > 0)
+	{
+		ThreadMessage* pMsg = m_vecMessages.front();
+		// First remove the message from the queue, else the message could be processed more then once
+		m_vecMessages.pop();
+
+		// Leave here as the message might make another
+		// thread call processmessages or sendmessage
+		lock.Leave();
+
+		ProcessMessage(pMsg);
+
+		if (pMsg->hWaitEvent)
+			SetEvent(pMsg->hWaitEvent);
+
+		delete pMsg;
+
+		// Reenter here again, to not ruin message vector
+		lock.Enter();
+	}
+}
+
+void CApplicationMessenger::ProcessMessage(ThreadMessage *pMsg)
+{
+	switch (pMsg->dwMessage)
+	{
+		case TMSG_SHUTDOWN:
+		case TMSG_POWERDOWN:
+		{
+			g_application.Stop();
+			Sleep(200);
+
+			CXBKernalExports::ShutdownXbox();
+			while(1){Sleep(0);}
+		}
+		break;
+
+		case TMSG_REBOOT:
+		{
+			g_application.Stop();
+			Sleep(200);
+			CXBKernalExports::RebootXbox();
+			while(1){Sleep(0);}
+		}
+		break;
+
+		case TMSG_SWITCHTOFULLSCREEN:
+			if( g_windowManager.GetActiveWindow() != WINDOW_FULLSCREEN_VIDEO )
+				g_application.SwitchToFullScreen();
+		break;
+
+		case TMSG_EXECUTE_BUILT_IN:
+			CBuiltins::Execute(pMsg->strParam.c_str());
+		break;
+
+		// Window messages below here...
+		case TMSG_DIALOG_DOMODAL: //doModel of window
+		{
+			CGUIDialog* pDialog = (CGUIDialog*)g_windowManager.GetWindow(pMsg->dwParam1);
+			if (!pDialog) return;
+
+			pDialog->DoModal();
+		}
+		break;
+
+		case TMSG_NETWORKMESSAGE:
+		{
+			g_application.getNetwork().NetworkMessage((CNetwork::EMESSAGE)pMsg->dwParam1, pMsg->dwParam2);
+		}
+		break;
+
+		case TMSG_MEDIA_PLAY:
+		{
+			// first check if we were called from the PlayFile() function
+			if (pMsg->lpVoid && pMsg->dwParam2 == 0)
+			{
+				CFileItem *item = (CFileItem *)pMsg->lpVoid;
+				g_application.PlayFile(*item, pMsg->dwParam1 != 0);
+				delete item;
+				return;
+			}
+			// restore to previous window if needed
+			if (g_windowManager.GetActiveWindow() == WINDOW_FULLSCREEN_VIDEO ||
+				g_windowManager.GetActiveWindow() == WINDOW_VISUALISATION)
+				g_windowManager.PreviousWindow();
+
+			g_application.ResetScreenSaver();
+
+			// play file
+			CFileItem item;
+			if (pMsg->lpVoid)
+			{
+				item = *(CFileItem *)pMsg->lpVoid;
+				delete (CFileItem *)pMsg->lpVoid;
+			}
+			else
+			{
+				item.SetPath(pMsg->strParam);
+				item.m_bIsFolder = false;
+			}
+
+			g_application.PlayFile(item);
+		}
+		break;
+
+		case TMSG_MEDIA_STOP:
+		{
+			// restore to previous window if needed
+			if (g_windowManager.GetActiveWindow() == WINDOW_FULLSCREEN_VIDEO ||
+				g_windowManager.GetActiveWindow() == WINDOW_VISUALISATION)
+				g_windowManager.PreviousWindow();
+
+			g_application.ResetScreenSaver();
+
+			// stop playing file
+			if (g_application.IsPlaying()) g_application.StopPlaying();
+		}
+		break;
+
+		case TMSG_MEDIA_PAUSE:
+			if (g_application.m_pPlayer)
+			{
+				g_application.ResetScreenSaver();
+				g_application.m_pPlayer->Pause();
+			}
+		break;
+
+		case TMSG_PLAYLISTPLAYER_PLAY:
+			if ((int)pMsg->dwParam1 >= 0)
+				g_playlistPlayer.Play((int)pMsg->dwParam1);
+			else
+				g_playlistPlayer.Play();
+		break;
+
+		case TMSG_PLAYLISTPLAYER_NEXT:
+			g_playlistPlayer.PlayNext();
+		break;
+
+		case TMSG_PLAYLISTPLAYER_PREV:
+			g_playlistPlayer.PlayPrevious();
+		break;
+	}
+}
+
+void CApplicationMessenger::ProcessWindowMessages()
+{
+	CSingleLock lock (m_critSection);
+
+	// Message type is window, process window messages
+	while (m_vecWindowMessages.size() > 0)
+	{
+		ThreadMessage* pMsg = m_vecWindowMessages.front();
+
+		// First remove the message from the queue, else the message could be processed more then once
+		m_vecWindowMessages.pop();
+
+		// Leave here in case we make more thread messages from this one
+		lock.Leave();
+
+		ProcessMessage(pMsg);
+		
+		if (pMsg->hWaitEvent)
+			SetEvent(pMsg->hWaitEvent);
+
+		delete pMsg;
+
+		lock.Enter();
+	}
+}
+
+void CApplicationMessenger::Shutdown()
+{
+	ThreadMessage tMsg = {TMSG_SHUTDOWN};
+	SendMessage(tMsg);
+}
+
+void CApplicationMessenger::Reboot()
+{
+	ThreadMessage tMsg = {TMSG_REBOOT};
+	SendMessage(tMsg);
+}
+
+void CApplicationMessenger::SwitchToFullscreen()
+{
+	// FIXME: Ideally this call should return upon a successfull switch but currently
+	// is causing deadlocks between the DVDPlayer destructor and the rendermanager
+	ThreadMessage tMsg = {TMSG_SWITCHTOFULLSCREEN};
+	SendMessage(tMsg, false);
+}
+
+void CApplicationMessenger::NetworkMessage(DWORD dwMessage, DWORD dwParam)
+{
+	ThreadMessage tMsg = {TMSG_NETWORKMESSAGE, dwMessage, dwParam};
+	SendMessage(tMsg);
+}
+
+void CApplicationMessenger::ExecBuiltIn(const CStdString &command)
+{
+	ThreadMessage tMsg = {TMSG_EXECUTE_BUILT_IN};
+	tMsg.strParam = command;
+	SendMessage(tMsg);
+}
+
+void CApplicationMessenger::MediaPlay(string filename)
+{
+	ThreadMessage tMsg = {TMSG_MEDIA_PLAY};
+	tMsg.strParam = filename;
+	SendMessage(tMsg, true);
+}
+
+void CApplicationMessenger::MediaPlay(const CFileItem &item)
+{
+	ThreadMessage tMsg = {TMSG_MEDIA_PLAY};
+	CFileItem *pItem = new CFileItem(item);
+	tMsg.lpVoid = (void *)pItem;
+	tMsg.dwParam1 = 0;
+	tMsg.dwParam2 = 1;
+	SendMessage(tMsg, true);
+}
+
+void CApplicationMessenger::MediaStop()
+{
+	ThreadMessage tMsg = {TMSG_MEDIA_STOP};
+	SendMessage(tMsg, true);
+}
+
+void CApplicationMessenger::MediaPause()
+{
+	ThreadMessage tMsg = {TMSG_MEDIA_PAUSE};
+	SendMessage(tMsg, true);
+}
+
+void CApplicationMessenger::PlayListPlayerNext()
+{
+	ThreadMessage tMsg = {TMSG_PLAYLISTPLAYER_NEXT};
+	SendMessage(tMsg, true);
+}
+
+void CApplicationMessenger::PlayListPlayerPrevious()
+{
+	ThreadMessage tMsg = {TMSG_PLAYLISTPLAYER_PREV};
+	SendMessage(tMsg, true);
+}
+
+void CApplicationMessenger::PlayListPlayerPlay(int iSong)
+{
+	ThreadMessage tMsg = {TMSG_PLAYLISTPLAYER_PLAY};
+	tMsg.dwParam1 = (DWORD)iSong;
+	SendMessage(tMsg, true);
+}

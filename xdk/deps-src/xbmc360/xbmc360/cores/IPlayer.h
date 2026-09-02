@@ -1,0 +1,95 @@
+#ifndef  IPLAYER_H
+#define  IPLAYER_H
+
+#include "cores\AudioRenderers\IAudioCallback.h"
+#include "utils\StdString.h"
+#include "guilib\key.h"
+
+class TiXmlElement; 
+class CStreamDetails;
+
+class CFileItem;
+
+class IPlayerCallback
+{
+public:
+	virtual ~IPlayerCallback() {}
+	virtual void OnPlayBackEnded() = 0;
+	virtual void OnPlayBackStarted() = 0;
+	virtual void OnPlayBackPaused() {};
+	virtual void OnPlayBackResumed() {};
+	virtual void OnPlayBackStopped() = 0;
+	virtual void OnQueueNextItem() = 0;
+	virtual void OnPlayBackSeek(int iTime, int seekOffset) {};
+	virtual void OnPlayBackSeekChapter(int iChapter) {};
+	virtual void OnPlayBackSpeedChanged(int iSpeed) {};
+};
+
+class CPlayerOptions
+{
+public:
+	CPlayerOptions()
+	{
+		starttime = 0LL;
+		identify = false;
+		fullscreen = false;
+		video_only = false;
+	}
+
+	double  starttime;  // Start time in seconds
+	double  startpercent; // Start time in percent
+	bool    identify;   // Identify mode, used for checking format and length of a file
+	CStdString state;   // Potential playerstate to restore to
+	bool    fullscreen; // Player is allowed to switch to fullscreen
+	bool    video_only; // Player is not allowed to play audio streams, video streams only
+};
+
+class IPlayer
+{
+public:
+	IPlayer(IPlayerCallback& callback): m_callback(callback){};
+	virtual ~IPlayer(){};
+
+	virtual void RegisterAudioCallback(IAudioCallback* pCallback) {};
+	virtual void UnRegisterAudioCallback() {};
+	virtual bool OpenFile(const CFileItem& file, const CPlayerOptions& options){ return false; }
+	virtual bool CloseFile(){ return true;};
+	virtual void SeekTime(__int64 iTime = 0){};
+	virtual void Seek(bool bPlus, bool bLargeStep) = 0;
+	virtual __int64 GetTime(){ return 0;};
+	virtual int GetTotalTime(){ return 0;};
+	virtual float GetPercentage(){ return 0;}
+	virtual void GetVideoInfo(CStdString& strVideoInfo) = 0;
+	virtual void GetAudioInfo(CStdString& strAudioInfo) = 0;
+	virtual void GetGeneralInfo(CStdString& strGeneralInfo) = 0;
+	virtual bool IsPlaying() const { return false;} ;
+	virtual void Pause() = 0;
+	virtual bool IsPaused() const = 0;
+	virtual bool HasVideo() const = 0;
+	virtual bool HasAudio() const = 0;
+	virtual bool CanSeek() {return true;}
+	virtual bool CanPause() {return true;}
+	virtual void SetVolume(long nVolume){}
+	virtual void DoAudioWork(){}
+	virtual bool OnAction(const CAction &action){ return false; };
+	virtual bool QueueNextFile(const CFileItem &file) { return false; }
+	virtual void OnNothingToQueueNotify() {}
+	virtual int GetAudioBitrate(){ return 0; }
+	virtual int GetChannels(){ return 0; }
+	virtual int GetBitsPerSample(){ return 0; }
+	virtual int GetSampleRate(){ return 0; }
+	virtual CStdString GetAudioCodecName(){ return ""; }
+	virtual void  SetAVDelay(float fValue = 0.0f) { return; }
+	virtual float GetAVDelay()                     { return 0.0f; }
+	virtual bool GetStreamDetails(CStreamDetails &details){ return false; }
+	virtual CStdString GetPlayerState(){ return ""; }
+	virtual void ToFFRW(int iSpeed = 0){}
+
+	// Returns true if not playback (paused or stopped beeing filled)
+	virtual bool IsCaching() const {return false;};
+
+protected:
+	IPlayerCallback& m_callback;
+};
+
+#endif //IPLAYER_H

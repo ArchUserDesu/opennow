@@ -1,0 +1,1101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="CodeAnalysis|Xbox 360">
+      <Configuration>CodeAnalysis</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|Xbox 360">
+      <Configuration>Debug</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Profile|Xbox 360">
+      <Configuration>Profile</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Profile_FastCap|Xbox 360">
+      <Configuration>Profile_FastCap</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_New|Xbox 360">
+      <Configuration>Release_New</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Xbox 360">
+      <Configuration>Release</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_LTCG|Xbox 360">
+      <Configuration>Release_LTCG</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{6D8604EB-029E-4096-A902-E5002DD822F8}</ProjectGuid>
+    <Keyword>Xbox360Proj</Keyword>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_New|Xbox 360'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release_New|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_New|Xbox 360'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Disabled</Optimization>
+      <ExceptionHandling>false</ExceptionHandling>
+      <MinimalRebuild>true</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <PreprocessorDefinitions>_DEBUG;_XBOX;__STDC_CONSTANT_MACROS;HAS_UPNP;HAS_WEB_SERVER;CURL_STATICLIB;_ITERATOR_DEBUG_LEVEL=0;_HAS_ITERATOR_DEBUGGING=0;HAS_PYTHON;Py_NO_ENABLE_SHARED</PreprocessorDefinitions>
+      <CallAttributedProfiling>Callcap</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>..\libraries\libPython\Include;..\libraries\libPython\PC;..\libraries\libPython\xbox360;..\libraries\libid3tag\include;..\libraries\libjpeg\include;..\xbmc360\;..\libraries\freetype\freetype\include;..\libraries\ffmpeg\;..\libraries\ffmpeg\vcproj\external\include;..\sources\360MilkDrop2;..\sources\PAPlayer\libFlac\include;..\sources\PAPlayer\libmad\include;..\libraries\libUPnP\Neptune\Source\Core;..\libraries\libUPnP\Platinum\Source\Core;..\libraries\libUPnP\Platinum\Source\Platinum;..\libraries\libUPnP\Platinum\Source\Devices\MediaServer;..\libraries\libUPnP\Platinum\Source\Devices\MediaRenderer;..\libraries\libUPnP\Platinum\Source\Devices\MediaConnect;..\libraries\libUPnP\Neptune\Source\System\Xbox;..\libraries\libUPnP\Neptune\Source\System\Win32;..\libraries\libcurl\include;..\libraries\libsmb2;..\libraries\libsmb2\include;..\libraries\sqlite3\include;..\libraries\sqlite3\include\wrapper;..\libraries\libiconv\include;..\libraries\libmicrohttpd\compat;..\xbmc360\compat;..\libraries\ffmpeg\vcproj\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>/EHa %(AdditionalOptions)</AdditionalOptions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
+      <AdditionalDependencies>d3d9d.lib;d3dx9d.lib;xgraphicsd.lib;xapilibd.lib;xaudiod2.lib;x3daudiod.lib;xmcored.lib;xboxkrnl.lib;xbdm.lib;xactd3.lib;xuirund.lib;xuirenderd.lib;xmediad2.lib;Xonline.lib;xnetd.lib;libavformat.lib;libswresample.lib;libavutil.lib;libswscale.lib;libavcodec.lib;zlib.lib;pthreads.lib;freetype.lib;360MilkDrop2.lib;libFlac.lib;libmad.lib;libPlatinum.lib;libcurl.lib;libsmb2.lib;sqlite3.lib;libiconv.lib;libjpeg.lib;libid3tag.lib;libmicrohttpd.lib;python34.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\libraries\ffmpeg\vcproj\libavcodec\Xbox 360\Debug;..\libraries\ffmpeg\vcproj\libswscale\Xbox 360\Debug;..\libraries\ffmpeg\vcproj\libavutil\Xbox 360\Debug;..\libraries\ffmpeg\vcproj\libavformat\Xbox 360\Debug;..\libraries\ffmpeg\vcproj\libswresample\Xbox 360\Debug;..\libraries\ffmpeg\vcproj\pthreads\Debug;..\libraries\ffmpeg\vcproj\external\zlib\Xbox 360\Debug;..\libraries\freetype\freetype\Debug;..\sources\360MilkDrop2\Debug;..\sources\PAPlayer\libFlac\Debug;..\sources\PAPlayer\libmad\Debug;..\libraries\libUPnP\Debug;..\libraries\libcurl\Debug;..\libraries\libsmb2\Debug;..\libraries\sqlite3\Debug;..\libraries\libiconv\Debug;..\libraries\libjpeg\Debug;..\libraries\libid3tag\Debug;..\libraries\libmicrohttpd\Debug;..\libraries\libPython\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <StackCommitSize>2097152</StackCommitSize>
+      <StackReserveSize>2097152</StackReserveSize>
+    </Link>
+    <Deploy>
+      <DeploymentType>CopyToHardDrive</DeploymentType>
+    </Deploy>
+    <ImageXex>
+      <ConfigurationFile>xex.xml</ConfigurationFile>
+    </ImageXex>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_New|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+      <Optimization>Full</Optimization>
+      <ExceptionHandling>false</ExceptionHandling>
+      <MinimalRebuild>true</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>_XBOX;__STDC_CONSTANT_MACROS;HAS_UPNP;HAS_WEB_SERVER;CURL_STATICLIB;HAS_PYTHON;Py_NO_ENABLE_SHARED</PreprocessorDefinitions>
+      <CallAttributedProfiling>Callcap</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>..\libraries\libPython\Include;..\libraries\libPython\PC;..\libraries\libPython\xbox360;..\libraries\libid3tag\include;..\libraries\libjpeg\include;..\xbmc360\;..\libraries\freetype\freetype\include;..\libraries\ffmpeg\;..\libraries\ffmpeg\vcproj\external\include;..\sources\360MilkDrop2;..\sources\PAPlayer\libFlac\include;..\sources\PAPlayer\libmad\include;..\libraries\libUPnP\Neptune\Source\Core;..\libraries\libUPnP\Platinum\Source\Core;..\libraries\libUPnP\Platinum\Source\Platinum;..\libraries\libUPnP\Platinum\Source\Devices\MediaServer;..\libraries\libUPnP\Platinum\Source\Devices\MediaRenderer;..\libraries\libUPnP\Platinum\Source\Devices\MediaConnect;..\libraries\libUPnP\Neptune\Source\System\Xbox;..\libraries\libUPnP\Neptune\Source\System\Win32;..\libraries\libcurl\include;..\libraries\libsmb2;..\libraries\libsmb2\include;..\libraries\sqlite3\include;..\libraries\sqlite3\include\wrapper;..\libraries\libiconv\include;..\libraries\libmicrohttpd\compat;..\xbmc360\compat;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>/EHa %(AdditionalOptions)</AdditionalOptions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <StringPooling>true</StringPooling>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
+      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
+      <AdditionalDependencies>d3d9d.lib;d3dx9d.lib;xgraphicsd.lib;xapilibd.lib;xaudiod2.lib;x3daudiod.lib;xmcored.lib;xboxkrnl.lib;xbdm.lib;xactd3.lib;xuirund.lib;xuirender.lib;xmediad2.lib;xonline.lib;xnetd.lib;libavformat.lib;libavutil.lib;libswscale.lib;libavcodec.lib;zlib.lib;pthreads.lib;freetype.lib;360MilkDrop2.lib;libFlac.lib;libmad.lib;libPlatinum.lib;libcurl.lib;libsmb2.lib;sqlite3.lib;libiconv.lib;libjpeg.lib;libid3tag.lib;libmicrohttpd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\libraries\ffmpeg\vcproj\libavcodec\Xbox 360\Release;..\libraries\ffmpeg\vcproj\libswscale\Xbox 360\Release;..\libraries\ffmpeg\vcproj\libavutil\Xbox 360\Release;..\libraries\ffmpeg\vcproj\libavformat\Xbox 360\Release;..\libraries\ffmpeg\vcproj\pthreads\Release;..\libraries\ffmpeg\vcproj\external\zlib\Xbox 360\Release;..\libraries\freetype\freetype\Release;..\sources\360MilkDrop2\Release;..\sources\PAPlayer\libFlac\Release;..\sources\PAPlayer\libMad\Release;..\libraries\libUPnP\Release_New;..\libraries\libcurl\Release;..\libraries\libsmb2\Release;..\libraries\sqlite3\Release;..\libraries\libiconv\Release;..\libraries\libjpeg\Release;..\libraries\libid3tag\Release;..\libraries\libmicrohttpd\Release;..\libraries\libPython\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <Deploy>
+      <DeploymentType>CopyToHardDrive</DeploymentType>
+    </Deploy>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level4</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Disabled</Optimization>
+      <ExceptionHandling>false</ExceptionHandling>
+      <MinimalRebuild>true</MinimalRebuild>
+      <PREfast>AnalyzeOnly</PREfast>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <PreprocessorDefinitions>_DEBUG;_XBOX;HAS_UPNP</PreprocessorDefinitions>
+      <CallAttributedProfiling>Callcap</CallAttributedProfiling>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
+      <AdditionalDependencies>xapilibd.lib;d3d9d.lib;d3dx9d.lib;xgraphicsd.lib;xboxkrnl.lib;xnetd.lib;xaudiod2.lib;xactd3.lib;x3daudiod.lib;xmcored.lib;xbdm.lib;vcompd.lib</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <Optimization>Full</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <ExceptionHandling>false</ExceptionHandling>
+      <StringPooling>true</StringPooling>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>NDEBUG;_XBOX;PROFILE;HAS_UPNP</PreprocessorDefinitions>
+      <CallAttributedProfiling>Callcap</CallAttributedProfiling>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>false</EnableCOMDATFolding>
+      <IgnoreSpecificDefaultLibraries>xapilib.lib</IgnoreSpecificDefaultLibraries>
+      <OptimizeReferences>true</OptimizeReferences>
+      <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
+      <SetChecksum>true</SetChecksum>
+      <AdditionalDependencies>xapilibi.lib;d3d9i.lib;d3dx9.lib;xgraphics.lib;xboxkrnl.lib;xnet.lib;xaudio2.lib;xact3i.lib;x3daudioi.lib;xmcorei.lib;xbdm.lib;vcomp.lib</AdditionalDependencies>
+    </Link>
+    <ImageXex>
+      <ConfigurationFile>xex.xml</ConfigurationFile>
+    </ImageXex>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <Optimization>Full</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <ExceptionHandling>false</ExceptionHandling>
+      <StringPooling>true</StringPooling>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <CallAttributedProfiling>Fastcap</CallAttributedProfiling>
+      <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>NDEBUG;_XBOX;PROFILE;FASTCAP;HAS_UPNP</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>false</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
+      <SetChecksum>true</SetChecksum>
+      <AdditionalDependencies>xapilib.lib;d3d9.lib;d3dx9.lib;xgraphics.lib;xboxkrnl.lib;xnet.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;xbdm.lib</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <StringPooling>true</StringPooling>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <ExceptionHandling>false</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>NDEBUG;_XBOX;__STDC_CONSTANT_MACROS;HAS_UPNP;HAS_WEB_SERVER;CURL_STATICLIB;HAS_PYTHON;Py_NO_ENABLE_SHARED</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..\libraries\libPython\Include;..\libraries\libPython\PC;..\libraries\libPython\xbox360;..\libraries\libid3tag\include;..\libraries\libjpeg\include;..\xbmc360\;..\libraries\freetype\freetype\include;..\libraries\ffmpeg\;..\libraries\ffmpeg\vcproj\external\include;..\sources\360MilkDrop2;..\sources\PAPlayer\libFlac\include;..\sources\PAPlayer\libmad\include;..\libraries\libUPnP\Neptune\Source\Core;..\libraries\libUPnP\Platinum\Source\Core;..\libraries\libUPnP\Platinum\Source\Platinum;..\libraries\libUPnP\Platinum\Source\Devices\MediaServer;..\libraries\libUPnP\Platinum\Source\Devices\MediaRenderer;..\libraries\libUPnP\Platinum\Source\Devices\MediaConnect;..\libraries\libUPnP\Neptune\Source\System\Xbox;..\libraries\libUPnP\Neptune\Source\System\Win32;..\libraries\libcurl\include;..\libraries\libsmb2;..\libraries\libsmb2\include;..\libraries\sqlite3\include;..\libraries\sqlite3\include\wrapper;..\libraries\libiconv\include;..\libraries\libmicrohttpd\compat;..\xbmc360\compat;..\libraries\ffmpeg\vcproj\external\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
+      <RegisterReservation>true</RegisterReservation>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <AdditionalOptions>/EHa %(AdditionalOptions)</AdditionalOptions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
+      <SetChecksum>true</SetChecksum>
+      <AdditionalDependencies>d3d9.lib;d3dx9.lib;xgraphics.lib;xapilib.lib;xaudio2.lib;x3daudio.lib;xmcore.lib;xboxkrnl.lib;xbdm.lib;xact3.lib;xuirun.lib;xuirender.lib;xmedia2.lib;xonline.lib;xnet.lib;libavformat.lib;libswresample.lib;libavutil.lib;libswscale.lib;libavcodec.lib;pthreads.lib;zlib.lib;freetype.lib;360MilkDrop2.lib;libflac.lib;libmad.lib;libPlatinum.lib;libcurl.lib;libsmb2.lib;sqlite3.lib;libiconv.lib;libjpeg.lib;libid3tag.lib;libmicrohttpd.lib;python34.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\libraries\ffmpeg\vcproj\libavcodec\Xbox 360\Release;..\libraries\ffmpeg\vcproj\libswscale\Xbox 360\Release;..\libraries\ffmpeg\vcproj\libavutil\Xbox 360\Release;..\libraries\ffmpeg\vcproj\libavformat\Xbox 360\Release;..\libraries\ffmpeg\vcproj\libswresample\Xbox 360\Release;..\libraries\ffmpeg\vcproj\pthreads\Release;..\libraries\ffmpeg\vcproj\external\zlib\Xbox 360\Release;..\libraries\freetype\freetype\Release;..\sources\360MilkDrop2\Release;..\sources\PAPlayer\libFlac\Release;..\sources\PAPlayer\libMad\Release;..\libraries\libUPnP\Release;..\libraries\libcurl\Release;..\libraries\libsmb2\Release;..\libraries\sqlite3\Release;..\libraries\libiconv\Release;..\libraries\libjpeg\Release;..\libraries\libid3tag\Release;..\libraries\libmicrohttpd\Release;..\libraries\libPython\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <StackCommitSize>2097152</StackCommitSize>
+      <StackReserveSize>2097152</StackReserveSize>
+    </Link>
+    <Deploy>
+      <DeploymentType>CopyToHardDrive</DeploymentType>
+    </Deploy>
+    <ImageXex>
+      <HeapSize>
+      </HeapSize>
+      <ConfigurationFile>xex.xml</ConfigurationFile>
+    </ImageXex>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <Optimization>Full</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <StringPooling>true</StringPooling>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
+      <ExceptionHandling>false</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>NDEBUG;_XBOX;LTCG;HAS_UPNP</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
+      <SetChecksum>true</SetChecksum>
+      <AdditionalDependencies>xapilib.lib;d3d9ltcg.lib;d3dx9.lib;xgraphics.lib;xboxkrnl.lib;xnet.lib;xaudio2.lib;xact3ltcg.lib;x3daudioltcg.lib;xmcoreltcg.lib;vcomp.lib</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="AdvancedSettings.h" />
+    <ClInclude Include="Application.h" />
+    <ClInclude Include="ApplicationMessenger.h" />
+    <ClInclude Include="ApplicationRenderer.h" />
+    <ClInclude Include="BackgroundInfoLoader.h" />
+    <ClInclude Include="ButtonTranslator.h" />
+    <ClInclude Include="cores\FFmpegThreading.h" />
+    <ClInclude Include="cores\AudioRenderers\IAudioCallback.h" />
+    <ClInclude Include="cores\AudioRenderers\IAudioRenderer.h" />
+    <ClInclude Include="cores\AudioRenderers\NullSound.h" />
+    <ClInclude Include="cores\AudioRenderers\XAudio2.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDAudio.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDClock.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDCodecs\Audio\DVDAudioCodec.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDCodecs\Audio\DVDAudioCodecFFmpeg.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDCodecs\DVDCodecs.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDCodecs\DVDCodecUtils.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDCodecs\DVDFactoryCodec.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDCodecs\video\DVDVideoCodec.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDCodecs\Video\DVDVideoCodecFFmpeg.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDDemuxers\DVDDemux.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDDemuxers\DVDDemuxFFmpeg.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDDemuxers\DVDDemuxUtils.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDDemuxers\DVDFactoryDemuxer.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDInputStreams\DVDFactoryInputStream.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDInputStreams\DVDInputStream.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDInputStreams\DVDInputStreamFile.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDInputStreams\DVDInputStreamSMB.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDMessage.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDMessageQueue.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDPerformanceCounter.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDPlayer.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDPlayerAudio.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDPlayerVideo.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDStreamInfo.h" />
+    <ClInclude Include="cores\DVDPlayer\Edl.h" />
+    <ClInclude Include="cores\DVDPlayer\IDVDPlayer.h" />
+    <ClInclude Include="cores\IPlayer.h" />
+    <ClInclude Include="cores\PAPlayer\AudioDecoder.h" />
+    <ClInclude Include="cores\PAPlayer\CachingCodec.h" />
+    <ClInclude Include="cores\PAPlayer\CodecFactory.h" />
+    <ClInclude Include="cores\PAPlayer\FLACcodec.h" />
+    <ClInclude Include="cores\PAPlayer\MP3codec.h" />
+    <ClInclude Include="cores\PAPlayer\ICodec.h" />
+    <ClInclude Include="cores\PAPlayer\PAPlayer.h" />
+    <ClInclude Include="cores\PlayerCoreFactory.h" />
+    <ClInclude Include="cores\VideoRenderers\BaseRenderer.h" />
+    <ClInclude Include="cores\VideoRenderers\RenderManager.h" />
+    <ClInclude Include="cores\VideoRenderers\RGBRenderer.h" />
+    <ClInclude Include="Favourites.h" />
+    <ClInclude Include="FileItem.h" />
+    <ClInclude Include="filesystem\Directory.h" />
+    <ClInclude Include="filesystem\DirectoryCache.h" />
+    <ClInclude Include="filesystem\DirectoryFactory.h" />
+    <ClInclude Include="filesystem\DirectoryHistory.h" />
+    <ClInclude Include="filesystem\Drive.h" />
+    <ClInclude Include="filesystem\DrivesManager.h" />
+    <ClInclude Include="filesystem\File.h" />
+    <ClInclude Include="filesystem\IFile.h" />
+    <ClInclude Include="filesystem\ZipDirectory.h" />
+    <ClInclude Include="filesystem\ZipFile.h" />
+    <ClInclude Include="filesystem\ZipManager.h" />
+    <ClInclude Include="filesystem\FileBrowser.h" />
+    <ClInclude Include="filesystem\FileDirectoryFactory.h" />
+    <ClInclude Include="filesystem\FileFactory.h" />
+    <ClInclude Include="filesystem\FileHD.h" />
+    <ClInclude Include="filesystem\FileSMB.h" />
+    <ClInclude Include="filesystem\CurlFile.h" />
+    <ClInclude Include="filesystem\CurlSessionPool.h" />
+    <ClInclude Include="filesystem\UPnPFile.h" />
+    <ClInclude Include="filesystem\HDDirectory.h" />
+    <ClInclude Include="filesystem\IDirectory.h" />
+    <ClInclude Include="filesystem\IFileDirectory.h" />
+    <ClInclude Include="filesystem\MultiPathDirectory.h" />
+    <ClInclude Include="filesystem\SMBDirectory.h" />
+    <ClInclude Include="filesystem\UPnPDirectory.h" />
+    <ClInclude Include="guilib\TextureBundle.h" />
+    <ClInclude Include="network\UPnP.h" />
+    <ClInclude Include="network\WebServer.h" />
+    <ClInclude Include="interfaces\json-rpc\ITransportLayer.h" />
+    <ClInclude Include="interfaces\json-rpc\IClient.h" />
+    <ClInclude Include="interfaces\json-rpc\JSONRPC.h" />
+    <ClInclude Include="filesystem\VirtualDirectory.h" />
+    <ClInclude Include="filesystem\XBFS_Wrap\EmuFileWrapper.h" />
+    <ClInclude Include="filesystem\XBFS_Wrap\XBFS_Wrap.h" />
+    <ClInclude Include="guilib\AudioContext.h" />
+    <ClInclude Include="guilib\dialogs\GUIDialogBoxBase.h" />
+    <ClInclude Include="guilib\dialogs\GUIDialogBusy.h" />
+    <ClInclude Include="guilib\dialogs\GUIDialogButtonMenu.h" />
+    <ClInclude Include="guilib\dialogs\GUIDialogContextMenu.h" />
+    <ClInclude Include="guilib\dialogs\GUIDialogFavourites.h" />
+    <ClInclude Include="guilib\dialogs\GUIDialogFileBrowser.h" />
+    <ClInclude Include="guilib\dialogs\GUIDialogKeyboard.h" />
+    <ClInclude Include="guilib\dialogs\GUIDialogMediaSource.h" />
+    <ClInclude Include="guilib\dialogs\GUIDialogMuteBug.h" />
+    <ClInclude Include="guilib\dialogs\GUIDialogNetworkSetup.h" />
+    <ClInclude Include="guilib\dialogs\GUIDialogNumeric.h" />
+    <ClInclude Include="guilib\dialogs\GUIDialogOK.h" />
+    <ClInclude Include="guilib\dialogs\GUIDialogProgress.h" />
+    <ClInclude Include="guilib\dialogs\GUIDialogSeekBar.h" />
+    <ClInclude Include="guilib\dialogs\GUIDialogSelect.h" />
+    <ClInclude Include="guilib\dialogs\GUIDialogSlider.h" />
+    <ClInclude Include="guilib\dialogs\GUIDialogVolumeBar.h" />
+    <ClInclude Include="guilib\dialogs\GUIDialogYesNo.h" />
+    <ClInclude Include="guilib\Geometry.h" />
+    <ClInclude Include="guilib\GraphicContext.h" />
+    <ClInclude Include="guilib\GUIAction.h" />
+    <ClInclude Include="guilib\GUIAudioManager.h" />
+    <ClInclude Include="guilib\GUIBaseContainer.h" />
+    <ClInclude Include="guilib\GUIBorderedImage.h" />
+    <ClInclude Include="guilib\GUIButtonControl.h" />
+    <ClInclude Include="guilib\GUIButtonScroller.h" />
+    <ClInclude Include="guilib\GUICheckMarkControl.h" />
+    <ClInclude Include="guilib\GUICallback.h" />
+    <ClInclude Include="guilib\GUIColorManager.h" />
+    <ClInclude Include="guilib\GUIControl.h" />
+    <ClInclude Include="guilib\GUIControlFactory.h" />
+    <ClInclude Include="guilib\GUIControlGroup.h" />
+    <ClInclude Include="guilib\GUIControlGroupList.h" />
+    <ClInclude Include="guilib\GUIDialog.h" />
+    <ClInclude Include="guilib\GUIEditControl.h" />
+    <ClInclude Include="guilib\GUIFadeLabelControl.h" />
+    <ClInclude Include="guilib\GUIFont.h" />
+    <ClInclude Include="guilib\GUIFontManager.h" />
+    <ClInclude Include="guilib\GUIFontTTF.h" />
+    <ClInclude Include="guilib\GUIImage.h" />
+    <ClInclude Include="guilib\GUIIncludes.h" />
+    <ClInclude Include="guilib\GUIInfoManager.h" />
+    <ClInclude Include="guilib\GUIInfoTypes.h" />
+    <ClInclude Include="guilib\GUILabel.h" />
+    <ClInclude Include="guilib\GUILabelControl.h" />
+    <ClInclude Include="guilib\GUIListContainer.h" />
+    <ClInclude Include="guilib\GUIFixedListContainer.h" />
+    <ClInclude Include="guilib\GUIWrappingListContainer.h" />
+    <ClInclude Include="guilib\GUIListGroup.h" />
+    <ClInclude Include="guilib\GUIListItem.h" />
+    <ClInclude Include="guilib\GUIListItemLayout.h" />
+    <ClInclude Include="guilib\GUIListLabel.h" />
+    <ClInclude Include="guilib\GUIMediaWindow.h" />
+    <ClInclude Include="guilib\GUIMoverControl.h" />
+    <ClInclude Include="guilib\GUIMessage.h" />
+    <ClInclude Include="guilib\GUIMultiImage.h" />
+    <ClInclude Include="guilib\GUIMultiSelectText.h" />
+    <ClInclude Include="guilib\GUIPanelContainer.h" />
+    <ClInclude Include="guilib\GUIProgressControl.h" />
+    <ClInclude Include="guilib\GUIRadioButtonControl.h" />
+    <ClInclude Include="guilib\GUIResizeControl.h" />
+    <ClInclude Include="guilib\GUIRSSControl.h" />
+    <ClInclude Include="guilib\GUIScrollBarControl.h" />
+    <ClInclude Include="guilib\GUISelectButtonControl.h" />
+    <ClInclude Include="guilib\GUISettingsSliderControl.h" />
+    <ClInclude Include="guilib\GUISliderControl.h" />
+    <ClInclude Include="guilib\GUISound.h" />
+    <ClInclude Include="guilib\GUISpinControl.h" />
+    <ClInclude Include="guilib\GUISpinControlEx.h" />
+    <ClInclude Include="guilib\GUIStandardWindow.h" />
+    <ClInclude Include="guilib\GUIStaticItem.h" />
+    <ClInclude Include="guilib\GUITextBox.h" />
+    <ClInclude Include="guilib\GUITextLayout.h" />
+    <ClInclude Include="guilib\GUITexture.h" />
+    <ClInclude Include="guilib\GUITextureD3D.h" />
+    <ClInclude Include="guilib\GUIToggleButtonControl.h" />
+    <ClInclude Include="guilib\GUIUserMessages.h" />
+    <ClInclude Include="guilib\GUIVideoControl.h" />
+    <ClInclude Include="guilib\GUIViewControl.h" />
+    <ClInclude Include="guilib\GUIVisualisationControl.h" />
+    <ClInclude Include="guilib\GUIWindow.h" />
+    <ClInclude Include="guilib\GUIWindowManager.h" />
+    <ClInclude Include="guilib\GUIWindowVideoBase.h" />
+    <ClInclude Include="guilib\IMsgTargetCallback.h" />
+    <ClInclude Include="guilib\include.h" />
+    <ClInclude Include="guilib\info\InfoBool.h" />
+    <ClInclude Include="guilib\info\SkinVariable.h" />
+    <ClInclude Include="guilib\IWindowManagerCallback.h" />
+    <ClInclude Include="guilib\Key.h" />
+    <ClInclude Include="guilib\LocalizeStrings.h" />
+    <ClInclude Include="guilib\screensavers\ScreensaverBase.h" />
+    <ClInclude Include="guilib\screensavers\ScreensaverPlasma.h" />
+    <ClInclude Include="guilib\SkinInfo.h" />
+    <ClInclude Include="guilib\AnimatedGif.h" />
+    <ClInclude Include="guilib\TextureManager.h" />
+    <ClInclude Include="guilib\tinyjson\tinyjson.h" />
+    <ClInclude Include="guilib\tinyxml\tinystr.h" />
+    <ClInclude Include="guilib\tinyxml\tinyxml.h" />
+    <ClInclude Include="guilib\TransformMatrix.h" />
+    <ClInclude Include="guilib\Tween.h" />
+    <ClInclude Include="guilib\viewstates\GUIViewState.h" />
+    <ClInclude Include="guilib\viewstates\GUIViewStateMusic.h" />
+    <ClInclude Include="guilib\viewstates\GUIViewStatePictures.h" />
+    <ClInclude Include="guilib\viewstates\GUIViewStatePrograms.h" />
+    <ClInclude Include="guilib\viewstates\GUIViewStateScripts.h" />
+    <ClInclude Include="guilib\viewstates\GUIViewStateVideo.h" />
+    <ClInclude Include="guilib\VisibleEffect.h" />
+    <ClInclude Include="guilib\windows\GUIWindowFullScreen.h" />
+    <ClInclude Include="guilib\windows\GUIWindowHome.h" />
+    <ClInclude Include="guilib\windows\GUIWindowMusicSongs.h" />
+    <ClInclude Include="guilib\windows\GUIWindowPictures.h" />
+    <ClInclude Include="guilib\windows\GUIWindowPrograms.h" />
+    <ClInclude Include="guilib\windows\GUIWindowScripts.h" />
+    <ClInclude Include="guilib\windows\GUIWindowScriptsInfo.h" />
+    <ClInclude Include="guilib\windows\GUIWindowScreensaver.h" />
+    <ClInclude Include="guilib\windows\GUIWindowSettings.h" />
+    <ClInclude Include="guilib\windows\GUIWindowSettingsCategory.h" />
+    <ClInclude Include="guilib\windows\GUIWindowSystemInfo.h" />
+    <ClInclude Include="guilib\windows\GUIWindowFileManager.h" />
+    <ClInclude Include="guilib\windows\GUIWindowVideoFiles.h" />
+    <ClInclude Include="guilib\windows\GUIWindowVisualisation.h" />
+    <ClInclude Include="guilib\windows\GUIWindowWeather.h" />
+    <ClInclude Include="guilib\XMLUtils.h" />
+    <ClInclude Include="GUILargeTextureManager.h" />
+    <ClInclude Include="GUISettings.h" />
+    <ClInclude Include="interfaces\Builtins.h" />
+    <ClInclude Include="interfaces\python\LibPython.h" />
+    <ClInclude Include="interfaces\python\XBPython.h" />
+    <ClInclude Include="interfaces\python\XBPyThread.h" />
+    <ClInclude Include="interfaces\python\xbmcmodule\player.h" />
+    <ClInclude Include="interfaces\python\xbmcmodule\PythonPlayer.h" />
+    <ClInclude Include="interfaces\python\xbmcmodule\pyutil.h" />
+    <ClInclude Include="interfaces\python\xbmcmodule\action.h" />
+    <ClInclude Include="interfaces\python\xbmcmodule\keyboard.h" />
+    <ClInclude Include="interfaces\python\xbmcmodule\pyplaylist.h" />
+    <ClInclude Include="interfaces\python\xbmcmodule\infotagmusic.h" />
+    <ClInclude Include="interfaces\python\xbmcmodule\infotagvideo.h" />
+    <ClInclude Include="interfaces\python\xbmcmodule\listitem.h" />
+    <ClInclude Include="interfaces\python\xbmcmodule\control.h" />
+    <ClInclude Include="interfaces\python\xbmcmodule\window.h" />
+    <ClInclude Include="interfaces\python\xbmcmodule\dialog.h" />
+    <ClInclude Include="interfaces\python\xbmcmodule\winxml.h" />
+    <ClInclude Include="interfaces\python\xbmcmodule\language.h" />
+    <ClInclude Include="interfaces\python\xbmcmodule\PythonSettings.h" />
+    <ClInclude Include="interfaces\python\xbmcmodule\GUIPythonWindow.h" />
+    <ClInclude Include="interfaces\python\xbmcmodule\GUIPythonWindowDialog.h" />
+    <ClInclude Include="interfaces\python\xbmcmodule\GUIPythonWindowXML.h" />
+    <ClInclude Include="interfaces\python\xbmcmodule\GUIPythonWindowXMLDialog.h" />
+    <ClInclude Include="IProgressCallback.h" />
+    <ClInclude Include="LangInfo.h" />
+    <ClInclude Include="MediaManager.h" />
+    <ClInclude Include="MediaSource.h" />
+    <ClInclude Include="music\tags\MusicInfoTag.h" />
+    <ClInclude Include="music\tags\LibID3Tag.h" />
+    <ClInclude Include="music\tags\Id3Tag.h" />
+    <ClInclude Include="music\tags\IMusicInfoTagLoader.h" />
+    <ClInclude Include="music\tags\MusicInfoTagLoaderFactory.h" />
+    <ClInclude Include="music\tags\MusicInfoTagLoaderMP3.h" />
+    <ClInclude Include="music\tags\Tag.h" />
+    <ClInclude Include="music\MusicInfoLoader.h" />
+    <ClInclude Include="cores\PAPlayer\ReplayGain.h" />
+    <ClInclude Include="PlayListPlayer.h" />
+    <ClInclude Include="playlists\PlayList.h" />
+    <ClInclude Include="playlists\PlayListFactory.h" />
+    <ClInclude Include="services\FTPServer\FTPFileWriter.h" />
+    <ClInclude Include="services\FTPServer\FTPServer.h" />
+    <ClInclude Include="services\FTPServer\FTPServerConn.h" />
+    <ClInclude Include="services\NTPClient\WinSckNTP.h" />
+    <ClInclude Include="Settings.h" />
+    <ClInclude Include="pictures\Picture.h" />
+    <ClInclude Include="pictures\GUIWindowSlideShow.h" />
+    <ClInclude Include="pictures\SlideShowPicture.h" />
+    <ClInclude Include="pictures\GUIDialogPictureInfo.h" />
+    <ClInclude Include="pictures\PictureInfoTag.h" />
+    <ClInclude Include="pictures\PictureInfoLoader.h" />
+    <ClInclude Include="pictures\libexif\libexif.h" />
+    <ClInclude Include="pictures\libexif\ExifParse.h" />
+    <ClInclude Include="pictures\libexif\IptcParse.h" />
+    <ClInclude Include="pictures\libexif\JpegParse.h" />
+    <ClInclude Include="SettingsControls.h" />
+    <ClInclude Include="SortFileItem.h" />
+    <ClInclude Include="Temperature.h" />
+    <ClInclude Include="ThumbLoader.h" />
+    <ClInclude Include="ThumbnailCache.h" />
+    <ClInclude Include="URL.h" />
+    <ClInclude Include="utils\Archive.h" />
+    <ClInclude Include="utils\asprintf.h" />
+    <ClInclude Include="utils\AutoPtrHandle.h" />
+    <ClInclude Include="utils\BitstreamStats.h" />
+    <ClInclude Include="utils\CharsetConverter.h" />
+    <ClInclude Include="utils\CRC_32.h" />
+    <ClInclude Include="utils\Crc32.h" />
+    <ClInclude Include="utils\CriticalSection.h" />
+    <ClInclude Include="utils\DelayController.h" />
+    <ClInclude Include="utils\Event.h" />
+    <ClInclude Include="utils\Idle.h" />
+    <ClInclude Include="utils\InfoLoader.h" />
+    <ClInclude Include="utils\JpegIO.h" />
+    <ClInclude Include="utils\minilzo.h" />
+    <ClInclude Include="utils\SystemInfo.h" />
+    <ClInclude Include="utils\Job.h" />
+    <ClInclude Include="utils\JobManager.h" />
+    <ClInclude Include="utils\LabelFormatter.h" />
+    <ClInclude Include="utils\AsyncFileCopy.h" />
+    <ClInclude Include="utils\Log.h" />
+    <ClInclude Include="utils\HTMLUtil.h" />
+    <ClInclude Include="utils\HttpHeader.h" />
+    <ClInclude Include="utils\MathUtils.h" />
+    <ClInclude Include="utils\md5.h" />
+    <ClInclude Include="utils\POUtils.h" />
+    <ClInclude Include="utils\RingBuffer.h" />
+    <ClInclude Include="utils\RssReader.h" />
+    <ClInclude Include="utils\SharedSection.h" />
+    <ClInclude Include="utils\SingleLock.h" />
+    <ClInclude Include="utils\Splash.h" />
+    <ClInclude Include="utils\Stdafx.h" />
+    <ClInclude Include="utils\StdString.h" />
+    <ClInclude Include="utils\Stopwatch.h" />
+    <ClInclude Include="utils\StringUtils.h" />
+    <ClInclude Include="utils\Thread.h" />
+    <ClInclude Include="utils\TimeUtils.h" />
+    <ClInclude Include="utils\URIUtils.h" />
+    <ClInclude Include="utils\StreamDetails.h" />
+    <ClInclude Include="utils\StreamUtils.h" />
+    <ClInclude Include="utils\Util.h" />
+    <ClInclude Include="utils\Variant.h" />
+    <ClInclude Include="utils\JSONVariantParser.h" />
+    <ClInclude Include="utils\Weather.h" />
+    <ClInclude Include="utils\Win32Exception.h" />
+    <ClInclude Include="utils\XEXUtils.h" />
+    <ClInclude Include="VideoSettings.h" />
+    <ClInclude Include="video\VideoInfoTag.h" />
+    <ClInclude Include="NfoFile.h" />
+    <ClInclude Include="video\Bookmark.h" />
+    <ClInclude Include="video\VideoDatabase.h" />
+    <ClInclude Include="Database.h" />
+    <ClInclude Include="ViewDatabase.h" />
+    <ClInclude Include="cores\DVDPlayer\DVDFileInfo.h" />
+    <ClInclude Include="ViewState.h" />
+    <ClInclude Include="visualizations\fft.h" />
+    <ClInclude Include="visualizations\Visualisation.h" />
+    <ClInclude Include="visualizations\VisualisationFactory.h" />
+    <ClInclude Include="XBApplicationEx.h" />
+    <ClInclude Include="XBDateTime.h" />
+    <ClInclude Include="xbox\Network.h" />
+    <ClInclude Include="xbox\socket_emu\addrinfo.h" />
+    <ClInclude Include="xbox\socket_emu\addrsize.h" />
+    <ClInclude Include="xbox\socket_emu\bittypes.h" />
+    <ClInclude Include="xbox\socket_emu\emu_socket.h" />
+    <ClInclude Include="xbox\socket_emu\sockstorage.h" />
+    <ClInclude Include="xbox\socket_emu\xb_emu_socket.h" />
+    <ClInclude Include="xbox\XBAudioUtils.h" />
+    <ClInclude Include="xbox\XBInput.h" />
+    <ClInclude Include="xbox\XBKernalExports.h" />
+    <ClInclude Include="xbox\XBTimeZone.h" />
+    <ClInclude Include="xbox\XBVideoConfig.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="AdvancedSettings.cpp" />
+    <ClCompile Include="Application.cpp">
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">..\xbox360 ffmpeg\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ApplicationMessenger.cpp" />
+    <ClCompile Include="ApplicationRenderer.cpp" />
+    <ClCompile Include="BackgroundInfoLoader.cpp" />
+    <ClCompile Include="ButtonTranslator.cpp" />
+    <ClCompile Include="cores\AudioRenderers\NullSound.cpp" />
+    <ClCompile Include="cores\AudioRenderers\XAudio2.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDAudio.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDClock.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDCodecs\Audio\DVDAudioCodecFFmpeg.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDCodecs\DVDCodecUtils.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDCodecs\DVDFactoryCodec.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDCodecs\Video\DVDVideoCodecFFmpeg.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDDemuxers\DVDDemux.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDDemuxers\DVDDemuxFFmpeg.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDDemuxers\DVDDemuxUtils.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDDemuxers\DVDFactoryDemuxer.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDInputStreams\DVDFactoryInputStream.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDInputStreams\DVDInputStream.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDInputStreams\DVDInputStreamFile.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDInputStreams\DVDInputStreamSMB.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDMessage.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDMessageQueue.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDPerformanceCounter.cpp" />
+    <ClCompile Include="cores\FFmpegThreading.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDPlayer.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDPlayerAudio.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDPlayerVideo.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDStreamInfo.cpp" />
+    <ClCompile Include="cores\DVDPlayer\Edl.cpp" />
+    <ClCompile Include="cores\PAPlayer\AudioDecoder.cpp" />
+    <ClCompile Include="cores\PAPlayer\CodecFactory.cpp" />
+    <ClCompile Include="cores\PAPlayer\FLACcodec.cpp" />
+    <ClCompile Include="cores\PAPlayer\MP3codec.cpp" />
+    <ClCompile Include="cores\PAPlayer\PAPlayer.cpp" />
+    <ClCompile Include="cores\PlayerCoreFactory.cpp" />
+    <ClCompile Include="cores\VideoRenderers\RenderManager.cpp" />
+    <ClCompile Include="cores\VideoRenderers\RGBRenderer.cpp" />
+    <ClCompile Include="Favourites.cpp" />
+    <ClCompile Include="FileItem.cpp" />
+    <ClCompile Include="filesystem\Directory.cpp" />
+    <ClCompile Include="filesystem\DirectoryCache.cpp" />
+    <ClCompile Include="filesystem\DirectoryFactory.cpp" />
+    <ClCompile Include="filesystem\DirectoryHistory.cpp" />
+    <ClCompile Include="filesystem\Drive.cpp" />
+    <ClCompile Include="filesystem\DrivesManager.cpp" />
+    <ClCompile Include="filesystem\File.cpp" />
+    <ClCompile Include="filesystem\IFile.cpp" />
+    <ClCompile Include="filesystem\FileBrowser.cpp" />
+    <ClCompile Include="filesystem\FileDirectoryFactory.cpp" />
+    <ClCompile Include="filesystem\FileFactory.cpp" />
+    <ClCompile Include="filesystem\FileHD.cpp" />
+    <ClCompile Include="filesystem\FileSMB.cpp" />
+    <ClCompile Include="filesystem\CurlFile.cpp" />
+    <ClCompile Include="filesystem\CurlSessionPool.cpp" />
+    <ClCompile Include="filesystem\UPnPFile.cpp" />
+    <ClCompile Include="filesystem\ZipDirectory.cpp" />
+    <ClCompile Include="filesystem\ZipFile.cpp" />
+    <ClCompile Include="filesystem\ZipManager.cpp" />
+    <ClCompile Include="filesystem\HDDirectory.cpp" />
+    <ClCompile Include="filesystem\IDirectory.cpp" />
+    <ClCompile Include="filesystem\MultiPathDirectory.cpp" />
+    <ClCompile Include="filesystem\SMBDirectory.cpp" />
+    <ClCompile Include="filesystem\UPnPDirectory.cpp" />
+    <ClCompile Include="guilib\TextureBundle.cpp" />
+    <ClCompile Include="network\UPnP.cpp" />
+    <ClCompile Include="network\WebServer.cpp" />
+    <ClCompile Include="interfaces\json-rpc\JSONRPC.cpp" />
+    <ClCompile Include="filesystem\VirtualDirectory.cpp" />
+    <ClCompile Include="filesystem\XBFS_Wrap\XBFS_Wrap.cpp" />
+    <ClCompile Include="guilib\AudioContext.cpp" />
+    <ClCompile Include="guilib\dialogs\GUIDialogBoxBase.cpp" />
+    <ClCompile Include="guilib\dialogs\GUIDialogBusy.cpp" />
+    <ClCompile Include="guilib\dialogs\GUIDialogButtonMenu.cpp" />
+    <ClCompile Include="guilib\dialogs\GUIDialogContextMenu.cpp" />
+    <ClCompile Include="guilib\dialogs\GUIDialogFavourites.cpp" />
+    <ClCompile Include="guilib\dialogs\GUIDialogFileBrowser.cpp" />
+    <ClCompile Include="guilib\dialogs\GUIDialogKeyboard.cpp" />
+    <ClCompile Include="guilib\dialogs\GUIDialogMediaSource.cpp" />
+    <ClCompile Include="guilib\dialogs\GUIDialogMuteBug.cpp" />
+    <ClCompile Include="guilib\dialogs\GUIDialogNetworkSetup.cpp" />
+    <ClCompile Include="guilib\dialogs\GUIDialogNumeric.cpp" />
+    <ClCompile Include="guilib\dialogs\GUIDialogOK.cpp" />
+    <ClCompile Include="guilib\dialogs\GUIDialogProgress.cpp" />
+    <ClCompile Include="guilib\dialogs\GUIDialogSeekBar.cpp" />
+    <ClCompile Include="guilib\dialogs\GUIDialogSelect.cpp" />
+    <ClCompile Include="guilib\dialogs\GUIDialogSlider.cpp" />
+    <ClCompile Include="guilib\dialogs\GUIDialogVolumeBar.cpp" />
+    <ClCompile Include="guilib\dialogs\GUIDialogYesNo.cpp" />
+    <ClCompile Include="guilib\GraphicContext.cpp" />
+    <ClCompile Include="guilib\GUIAction.cpp" />
+    <ClCompile Include="guilib\GUIAudioManager.cpp" />
+    <ClCompile Include="guilib\GUIBaseContainer.cpp" />
+    <ClCompile Include="guilib\GUIBorderedImage.cpp" />
+    <ClCompile Include="guilib\GUIButtonControl.cpp" />
+    <ClCompile Include="guilib\GUIButtonScroller.cpp" />
+    <ClCompile Include="guilib\GUICheckMarkControl.cpp" />
+    <ClCompile Include="guilib\GUIColorManager.cpp" />
+    <ClCompile Include="guilib\GUIControl.cpp" />
+    <ClCompile Include="guilib\GUIControlFactory.cpp" />
+    <ClCompile Include="guilib\GUIControlGroup.cpp" />
+    <ClCompile Include="guilib\GUIControlGroupList.cpp" />
+    <ClCompile Include="guilib\GUIDialog.cpp" />
+    <ClCompile Include="guilib\GUIEditControl.cpp" />
+    <ClCompile Include="guilib\GUIFadeLabelControl.cpp" />
+    <ClCompile Include="guilib\GUIFont.cpp" />
+    <ClCompile Include="guilib\GUIFontManager.cpp" />
+    <ClCompile Include="guilib\GUIFontTTF.cpp" />
+    <ClCompile Include="guilib\GUIImage.cpp" />
+    <ClCompile Include="guilib\GUIIncludes.cpp" />
+    <ClCompile Include="guilib\GUIInfoManager.cpp" />
+    <ClCompile Include="guilib\GUIInfoTypes.cpp" />
+    <ClCompile Include="guilib\GUILabel.cpp" />
+    <ClCompile Include="guilib\GUILabelControl.cpp" />
+    <ClCompile Include="guilib\GUIListContainer.cpp" />
+    <ClCompile Include="guilib\GUIFixedListContainer.cpp" />
+    <ClCompile Include="guilib\GUIWrappingListContainer.cpp" />
+    <ClCompile Include="guilib\GUIListGroup.cpp" />
+    <ClCompile Include="guilib\GUIListItem.cpp" />
+    <ClCompile Include="guilib\GUIListItemLayout.cpp" />
+    <ClCompile Include="guilib\GUIListLabel.cpp" />
+    <ClCompile Include="guilib\GUIMediaWindow.cpp" />
+    <ClCompile Include="guilib\GUIMoverControl.cpp" />
+    <ClCompile Include="guilib\GUIMessage.cpp" />
+    <ClCompile Include="guilib\GUIMultiImage.cpp" />
+    <ClCompile Include="guilib\GUIMultiSelectText.cpp" />
+    <ClCompile Include="guilib\GUIPanelContainer.cpp" />
+    <ClCompile Include="guilib\GUIProgressControl.cpp" />
+    <ClCompile Include="guilib\GUIRadioButtonControl.cpp" />
+    <ClCompile Include="guilib\GUIResizeControl.cpp" />
+    <ClCompile Include="guilib\GUIRSSControl.cpp" />
+    <ClCompile Include="guilib\GUIScrollBarControl.cpp" />
+    <ClCompile Include="guilib\GUISelectButtonControl.cpp" />
+    <ClCompile Include="guilib\GUISettingsSliderControl.cpp" />
+    <ClCompile Include="guilib\GUISliderControl.cpp" />
+    <ClCompile Include="guilib\GUISound.cpp" />
+    <ClCompile Include="guilib\GUISpinControl.cpp" />
+    <ClCompile Include="guilib\GUISpinControlEx.cpp" />
+    <ClCompile Include="guilib\GUIStandardWindow.cpp" />
+    <ClCompile Include="guilib\GUIStaticItem.cpp" />
+    <ClCompile Include="guilib\GUITextBox.cpp" />
+    <ClCompile Include="guilib\GUITextLayout.cpp" />
+    <ClCompile Include="guilib\GUITexture.cpp" />
+    <ClCompile Include="guilib\GUITextureD3D.cpp" />
+    <ClCompile Include="guilib\GUIToggleButtonControl.cpp" />
+    <ClCompile Include="guilib\GUIVideoControl.cpp" />
+    <ClCompile Include="guilib\GUIViewControl.cpp" />
+    <ClCompile Include="guilib\GUIVisualisationControl.cpp">
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">C:\Users\Brent de Carteret\Documents\Visual Studio 2010\Projects\360Milkdrop2\Release;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="guilib\GUIWindow.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">MaxSpeed</Optimization>
+      <PreschedulingOptimization Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">false</PreschedulingOptimization>
+      <InlineAssemblyOptimization Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</InlineAssemblyOptimization>
+    </ClCompile>
+    <ClCompile Include="guilib\GUIWindowManager.cpp" />
+    <ClCompile Include="guilib\GUIWindowVideoBase.cpp" />
+    <ClCompile Include="guilib\info\InfoBool.cpp" />
+    <ClCompile Include="guilib\info\SkinVariable.cpp" />
+    <ClCompile Include="guilib\LocalizeStrings.cpp" />
+    <ClCompile Include="guilib\screensavers\ScreensaverPlasma.cpp" />
+    <ClCompile Include="guilib\SkinInfo.cpp" />
+    <ClCompile Include="guilib\AnimatedGif.cpp" />
+    <ClCompile Include="guilib\TextureManager.cpp" />
+    <ClCompile Include="guilib\tinyjson\tinyjson.cpp" />
+    <ClCompile Include="guilib\tinyxml\tinystr.cpp" />
+    <ClCompile Include="guilib\tinyxml\tinyxml.cpp" />
+    <ClCompile Include="guilib\tinyxml\tinyxmlerror.cpp" />
+    <ClCompile Include="guilib\tinyxml\tinyxmlparser.cpp" />
+    <ClCompile Include="guilib\viewstates\GUIViewState.cpp" />
+    <ClCompile Include="guilib\viewstates\GUIViewStateMusic.cpp" />
+    <ClCompile Include="guilib\viewstates\GUIViewStatePictures.cpp" />
+    <ClCompile Include="guilib\viewstates\GUIViewStatePrograms.cpp" />
+    <ClCompile Include="guilib\viewstates\GUIViewStateScripts.cpp" />
+    <ClCompile Include="guilib\viewstates\GUIViewStateVideo.cpp" />
+    <ClCompile Include="guilib\VisibleEffect.cpp" />
+    <ClCompile Include="guilib\windows\GUIWindowFullScreen.cpp" />
+    <ClCompile Include="guilib\windows\GUIWindowHome.cpp" />
+    <ClCompile Include="guilib\windows\GUIWindowMusicSongs.cpp" />
+    <ClCompile Include="guilib\windows\GUIWindowPictures.cpp" />
+    <ClCompile Include="guilib\windows\GUIWindowPrograms.cpp" />
+    <ClCompile Include="guilib\windows\GUIWindowScripts.cpp" />
+    <ClCompile Include="guilib\windows\GUIWindowScriptsInfo.cpp" />
+    <ClCompile Include="guilib\windows\GUIWindowScreensaver.cpp" />
+    <ClCompile Include="guilib\windows\GUIWindowSettings.cpp" />
+    <ClCompile Include="guilib\windows\GUIWindowSettingsCategory.cpp" />
+    <ClCompile Include="guilib\windows\GUIWindowSystemInfo.cpp" />
+    <ClCompile Include="guilib\windows\GUIWindowFileManager.cpp" />
+    <ClCompile Include="guilib\windows\GUIWindowVideoFiles.cpp" />
+    <ClCompile Include="guilib\windows\GUIWindowVisualisation.cpp" />
+    <ClCompile Include="guilib\windows\GUIWindowWeather.cpp" />
+    <ClCompile Include="guilib\XMLUtils.cpp" />
+    <ClCompile Include="GUILargeTextureManager.cpp" />
+    <ClCompile Include="GUISettings.cpp" />
+    <ClCompile Include="interfaces\Builtins.cpp" />
+    <ClCompile Include="interfaces\python\LibPython.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\XBPython.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\XBPyThread.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\xbmcmodule.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\xbmcguimodule.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\xbmcpluginmodule.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\player.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\PythonPlayer.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\pyutil.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\action.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\keyboard.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\pyplaylist.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\infotagmusic.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\infotagvideo.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\listitem.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\control.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\controllabel.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\controlbutton.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\controlcheckmark.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\controlfadelabel.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\controltextbox.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\controlimage.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\controlprogress.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\controlgroup.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\controllist.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\controlradiobutton.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\controlspin.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\window.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\dialog.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\winxml.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\winxmldialog.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\language.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\PythonSettings.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\GUIPythonWindow.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\GUIPythonWindowDialog.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\GUIPythonWindowXML.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="interfaces\python\xbmcmodule\GUIPythonWindowXMLDialog.cpp">
+      <ForcedIncludeFiles>pyconfig-xbox360.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Include="Key.cpp" />
+    <ClCompile Include="LangInfo.cpp" />
+    <ClCompile Include="MediaManager.cpp" />
+    <ClCompile Include="MediaSource.cpp" />
+    <ClCompile Include="music\tags\MusicInfoTag.cpp" />
+    <ClCompile Include="music\tags\Id3Tag.cpp" />
+    <ClCompile Include="music\tags\MusicInfoTagLoaderFactory.cpp" />
+    <ClCompile Include="music\tags\MusicInfoTagLoaderMP3.cpp" />
+    <ClCompile Include="music\MusicInfoLoader.cpp" />
+    <ClCompile Include="PlayListPlayer.cpp" />
+    <ClCompile Include="playlists\PlayList.cpp" />
+    <ClCompile Include="playlists\PlayListFactory.cpp" />
+    <ClCompile Include="services\FTPServer\FTPFileWriter.cpp" />
+    <ClCompile Include="services\FTPServer\FTPServer.cpp" />
+    <ClCompile Include="services\FTPServer\FTPServerConn.cpp" />
+    <ClCompile Include="services\NTPClient\WinSckNTP.cpp" />
+    <ClCompile Include="pictures\Picture.cpp" />
+    <ClCompile Include="pictures\GUIWindowSlideShow.cpp" />
+    <ClCompile Include="pictures\SlideShowPicture.cpp" />
+    <ClCompile Include="pictures\GUIDialogPictureInfo.cpp" />
+    <ClCompile Include="pictures\PictureInfoTag.cpp" />
+    <ClCompile Include="pictures\PictureInfoLoader.cpp" />
+    <ClCompile Include="pictures\libexif\libexif.cpp" />
+    <ClCompile Include="pictures\libexif\ExifParse.cpp" />
+    <ClCompile Include="pictures\libexif\IptcParse.cpp" />
+    <ClCompile Include="pictures\libexif\JpegParse.cpp" />
+    <ClCompile Include="Settings.cpp" />
+    <ClCompile Include="SettingsControls.cpp" />
+    <ClCompile Include="SortFileItem.cpp" />
+    <ClCompile Include="Temperature.cpp" />
+    <ClCompile Include="ThumbLoader.cpp" />
+    <ClCompile Include="ThumbnailCache.cpp" />
+    <ClCompile Include="URL.cpp" />
+    <ClCompile Include="utils\Archive.cpp" />
+    <ClCompile Include="utils\asprintf.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_New|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="utils\AutoPtrHandle.cpp" />
+    <ClCompile Include="utils\BitstreamStats.cpp" />
+    <ClCompile Include="utils\CharsetConverter.cpp" />
+    <ClCompile Include="utils\CRC_32.cpp" />
+    <ClCompile Include="utils\Crc32.cpp" />
+    <ClCompile Include="utils\CriticalSection.cpp" />
+    <ClCompile Include="utils\DelayController.cpp" />
+    <ClCompile Include="utils\Event.cpp" />
+    <ClCompile Include="utils\Idle.cpp" />
+    <ClCompile Include="utils\InfoLoader.cpp" />
+    <ClCompile Include="utils\JpegIO.cpp" />
+    <ClCompile Include="utils\minilzo.cpp" />
+    <ClCompile Include="utils\SystemInfo.cpp" />
+    <ClCompile Include="utils\JobManager.cpp" />
+    <ClCompile Include="utils\LabelFormatter.cpp" />
+    <ClCompile Include="utils\AsyncFileCopy.cpp" />
+    <ClCompile Include="utils\Log.cpp" />
+    <ClCompile Include="utils\HTMLUtil.cpp" />
+    <ClCompile Include="utils\HttpHeader.cpp" />
+    <ClCompile Include="utils\md5.cpp" />
+    <ClCompile Include="utils\POUtils.cpp" />
+    <ClCompile Include="utils\RingBuffer.cpp" />
+    <ClCompile Include="utils\RssReader.cpp" />
+    <ClCompile Include="utils\SharedSection.cpp" />
+    <ClCompile Include="utils\SingleLock.cpp" />
+    <ClCompile Include="utils\Splash.cpp" />
+    <ClCompile Include="utils\Stdafx.cpp" />
+    <ClCompile Include="utils\Stopwatch.cpp" />
+    <ClCompile Include="utils\StringUtils.cpp" />
+    <ClCompile Include="utils\Thread.cpp" />
+    <ClCompile Include="utils\TimeUtils.cpp" />
+    <ClCompile Include="utils\URIUtils.cpp" />
+    <ClCompile Include="utils\StreamDetails.cpp" />
+    <ClCompile Include="utils\StreamUtils.cpp" />
+    <ClCompile Include="utils\Util.cpp" />
+    <ClCompile Include="utils\Variant.cpp" />
+    <ClCompile Include="utils\JSONVariantParser.cpp" />
+    <ClCompile Include="utils\Weather.cpp" />
+    <ClCompile Include="utils\Win32Exception.cpp" />
+    <ClCompile Include="utils\XEXUtils.cpp" />
+    <ClCompile Include="VideoSettings.cpp" />
+    <ClCompile Include="video\VideoInfoTag.cpp" />
+    <ClCompile Include="NfoFile.cpp" />
+    <ClCompile Include="video\Bookmark.cpp" />
+    <ClCompile Include="video\VideoDatabase.cpp" />
+    <ClCompile Include="Database.cpp" />
+    <ClCompile Include="ViewDatabase.cpp" />
+    <ClCompile Include="cores\DVDPlayer\DVDFileInfo.cpp" />
+    <ClCompile Include="visualizations\fft.cpp" />
+    <ClCompile Include="visualizations\Visualisation.cpp" />
+    <ClCompile Include="visualizations\VisualisationFactory.cpp" />
+    <ClCompile Include="XBApplicationEx.cpp" />
+    <ClCompile Include="XBDateTime.cpp" />
+    <ClCompile Include="xbmc.cpp" />
+    <ClCompile Include="xbox\Network.cpp" />
+    <ClCompile Include="xbox\socket_emu\emu_socket.cpp" />
+    <ClCompile Include="xbox\socket_emu\getaddrinfo.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_New|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="xbox\socket_emu\getnameinfo.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_New|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="xbox\socket_emu\inet_aton.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_New|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="xbox\socket_emu\inet_ntop.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_New|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="xbox\socket_emu\inet_pton.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_New|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="xbox\XBAudioUtils.cpp" />
+    <ClCompile Include="xbox\XBInput.cpp" />
+    <ClCompile Include="xbox\XBKernalExports.cpp" />
+    <ClCompile Include="xbox\XBTimeZone.cpp" />
+    <ClCompile Include="xbox\XBVideoConfig.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

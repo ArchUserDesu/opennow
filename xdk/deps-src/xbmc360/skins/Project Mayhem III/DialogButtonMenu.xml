@@ -1,0 +1,111 @@
+<window type="buttonMenu" id="111">
+	<defaultcontrol always="true">3112</defaultcontrol>
+	<coordinates>
+		<system>1</system>
+		<posx>185</posx>
+		<posy>230</posy>
+	</coordinates>
+	<controls>
+	
+		<control type="image">
+			<posx>-185</posx>
+			<posy>-230</posy>
+			<width>720</width>
+			<height>576</height>
+			<texture>black.png</texture>
+			<animation effect="fade" time="2000" delay="300">WindowOpen</animation>
+			<animation effect="fade" time="700" delay="300">WindowClose</animation>
+		</control>
+		
+		<control type="image">
+			<posx>-245</posx>
+			<posy>0</posy>
+			<width>805</width>
+			<height>90</height>
+			<texture>sub-background.png</texture>
+			<include>shutdownmenu</include>
+		</control>
+		
+		<control type="group">		
+			<include>shutdownmenu</include>
+			<animation effect="slide" time="0" end="30,0" condition="!System.HasLoginScreen">Conditional</animation>		
+			<control type="button" id="3113">
+				<description>System Info button</description>
+				<posx>60</posx>
+				<posy>5</posy>
+				<width>60</width>
+				<height>65</height>
+				<texturefocus>sub-info-focus.png</texturefocus>
+				<texturenofocus>sub-info-nofocus.png</texturenofocus>
+				<onclick>XBMC.ActivateWindow(7)</onclick>
+				<pulseonselect>no</pulseonselect>
+				<onleft>3114</onleft>
+				<onright>3112</onright>
+				<onup>3113</onup>
+				<ondown>3113</ondown>
+				<font>-</font>
+				<label>130</label>
+			</control>		
+		
+			<control type="button" id="3112">
+				<description>Shutdown button</description>
+				<posx>180</posx>
+				<posy>5</posy>
+				<width>60</width>
+				<height>65</height>
+				<texturefocus>sub-shutdown-focus.png</texturefocus>
+				<texturenofocus>sub-shutdown-nofocus.png</texturenofocus>
+				<onclick>XBMC.ShutDown()</onclick>
+				<pulseonselect>no</pulseonselect>
+				<onleft>3113</onleft>
+				<onright>3114</onright>
+				<onup>3112</onup>
+				<ondown>3112</ondown>
+				<font>-</font>
+				<label>13005</label>
+			</control>
+
+			<control type="button" id="3114">
+				<description>Reboot button</description>
+				<posx>300</posx>
+				<posy>5</posy>
+				<width>60</width>
+				<height>65</height>
+				<texturefocus>sub-reboot-focus.png</texturefocus>
+				<texturenofocus>sub-reboot-nofocus.png</texturenofocus>
+				<onclick>XBMC.Reboot()</onclick>
+				<pulseonselect>no</pulseonselect>
+				<onleft>3112</onleft>
+				<onright>3113</onright>
+				<onup>3114</onup>
+				<ondown>3114</ondown>
+				<font>-</font>
+				<label>13313</label>
+			</control>
+			
+		</control>	
+			
+		<control type="image" id="0">
+			<posx>-245</posx>
+			<posy>84</posy>
+			<width>805</width>
+			<height>46</height>
+			<texture>sub-background-label.png</texture>
+			<include>shutdownmenu</include>
+		</control>
+			
+		<control type="label" id="3100">
+			<description>Label control</description>
+			<posx>19</posx>
+			<posy>91</posy>
+			<width>322</width>
+			<height>20</height>
+			<label>-</label>
+			<align>center</align>
+			<aligny>center</aligny>
+			<font>font12</font>
+			<include>shutdownmenu</include>
+		</control>
+		
+	</controls>
+</window>
