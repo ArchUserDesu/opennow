@@ -1,0 +1,15 @@
+#ifndef JANSSON_PRIVATE_CONFIG_H
+#define JANSSON_PRIVATE_CONFIG_H
+
+#define HAVE_STDINT_H 1
+#define HAVE_INT32_T 1
+#define HAVE_UINT32_T 1
+#define HAVE_UINT16_T 1
+#define HAVE_UINT8_T 1
+#define HAVE_SSIZE_T 1
+#define WORDS_BIGENDIAN 1
+#define USE_DTOA 0
+#define DTOA_ENABLED 0
+#define INITIAL_HASHTABLE_ORDER 3
+
+#endif

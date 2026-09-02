@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+ <ItemGroup Label="ProjectConfigurations">
+  <ProjectConfiguration Include="Debug|Xbox 360"><Configuration>Debug</Configuration><Platform>Xbox 360</Platform></ProjectConfiguration>
+  <ProjectConfiguration Include="Release|Xbox 360"><Configuration>Release</Configuration><Platform>Xbox 360</Platform></ProjectConfiguration>
+ </ItemGroup>
+ <PropertyGroup Label="Globals"><ProjectGuid>{17C032C0-F020-5C1C-98D5-E310BBE5E9A9}</ProjectGuid><RootNamespace>cjson</RootNamespace></PropertyGroup>
+ <PropertyGroup><OutDir>$(ProjectDir)..\lib\$(Configuration)\</OutDir><IntDir>$(ProjectDir)..\obj\cjson\$(Configuration)\</IntDir></PropertyGroup>
+ <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.Default.props" />
+ <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="Configuration"><ConfigurationType>StaticLibrary</ConfigurationType><CharacterSet>NotSet</CharacterSet></PropertyGroup>
+ <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="Configuration"><ConfigurationType>StaticLibrary</ConfigurationType><CharacterSet>NotSet</CharacterSet><WholeProgramOptimization>false</WholeProgramOptimization></PropertyGroup>
+ <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.props" />
+ <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+  <ClCompile><AdditionalIncludeDirectories>..\deps-src\opennow-switch\extern\libpeer\third_party\cJSON;$(ProjectDir)..\compat;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories><PreprocessorDefinitions>;_XBOX;OPENNOW_XDK=1;%(PreprocessorDefinitions)</PreprocessorDefinitions><CompileAs>CompileAsC</CompileAs><WarningLevel>Level3</WarningLevel><ForcedIncludeFiles>..\compat\opennow_xdk_compat.h;%(ForcedIncludeFiles)</ForcedIncludeFiles></ClCompile>
+ </ItemDefinitionGroup>
+ <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+  <ClCompile><AdditionalIncludeDirectories>..\deps-src\opennow-switch\extern\libpeer\third_party\cJSON;$(ProjectDir)..\compat;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories><PreprocessorDefinitions>;_XBOX;OPENNOW_XDK=1;%(PreprocessorDefinitions)</PreprocessorDefinitions><CompileAs>CompileAsC</CompileAs><WarningLevel>Level3</WarningLevel><ForcedIncludeFiles>..\compat\opennow_xdk_compat.h;%(ForcedIncludeFiles)</ForcedIncludeFiles></ClCompile>
+ </ItemDefinitionGroup>
+ <ItemGroup>
+  <ClCompile Include="..\deps-src\opennow-switch\extern\libpeer\third_party\cJSON\cJSON.c" />
+ </ItemGroup>
+ <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

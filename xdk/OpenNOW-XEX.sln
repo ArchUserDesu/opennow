@@ -1,0 +1,16 @@
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{BC8A1FFA-BEE3-4634-8014-F334798102B3}") = "OpenNOW-XEX", "OpenNOW-XEX.vcxproj", "{70E332D5-5A03-43AA-A05B-2B71DD7969BF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Xbox 360 = Debug|Xbox 360
+		Release|Xbox 360 = Release|Xbox 360
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{70E332D5-5A03-43AA-A05B-2B71DD7969BF}.Debug|Xbox 360.ActiveCfg = Debug|Xbox 360
+		{70E332D5-5A03-43AA-A05B-2B71DD7969BF}.Debug|Xbox 360.Build.0 = Debug|Xbox 360
+		{70E332D5-5A03-43AA-A05B-2B71DD7969BF}.Release|Xbox 360.ActiveCfg = Release|Xbox 360
+		{70E332D5-5A03-43AA-A05B-2B71DD7969BF}.Release|Xbox 360.Build.0 = Release|Xbox 360
+	EndGlobalSection
+EndGlobal

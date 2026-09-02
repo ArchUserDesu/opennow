@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Xbox 360"><Configuration>Debug</Configuration><Platform>Xbox 360</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Xbox 360"><Configuration>Release</Configuration><Platform>Xbox 360</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{70E332D5-5A03-43AA-A05B-2B71DD7969BF}</ProjectGuid>
+    <RootNamespace>OpenNOWXEX</RootNamespace>
+    <ProjectName>OpenNOW-XEX</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType><CharacterSet>NotSet</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType><CharacterSet>NotSet</CharacterSet><WholeProgramOptimization>false</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <OutDir>$(ProjectDir)bin\$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir)obj\opennow\$(Configuration)\</IntDir>
+    <TargetName>default</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization><RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary><WarningLevel>Level3</WarningLevel>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\include;$(ProjectDir)compat;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\include;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\src;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\third_party\cJSON;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\third_party\mbedtls\include;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\third_party\libsrtp\include;$(ProjectDir)deps-src\jansson\src;$(ProjectDir)deps-src\opus\include;$(ProjectDir)deps-src\xbmc360\libraries\ffmpeg;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_XBOX;OPENNOW_XDK=1;OPENNOW_HAVE_FFMPEG=1;CONFIG_USE_USRSCTP=0;DISABLE_PEER_SIGNALING=1;CONFIG_IPV6=0;MBEDTLS_CONFIG_FILE="mbedtls_xdk_config.h";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(ProjectDir)lib\Debug;$(ProjectDir)deps-src\xbmc360\libraries\ffmpeg\vcproj\libavcodec\Xbox 360\Debug;$(ProjectDir)deps-src\xbmc360\libraries\ffmpeg\vcproj\libavutil\Xbox 360\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>peer.lib;srtp2.lib;mbedtls_opennow.lib;cjson.lib;jansson.lib;opus.lib;libavcodec.lib;libavutil.lib;xnet.lib;xapilib.lib;d3d9.lib;xaudio2.lib;xboxkrnl.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization><IntrinsicFunctions>true</IntrinsicFunctions><FavorSizeOrSpeed>Speed</FavorSizeOrSpeed><RuntimeLibrary>MultiThreaded</RuntimeLibrary><WarningLevel>Level3</WarningLevel>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\include;$(ProjectDir)compat;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\include;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\src;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\third_party\cJSON;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\third_party\mbedtls\include;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\third_party\libsrtp\include;$(ProjectDir)deps-src\jansson\src;$(ProjectDir)deps-src\opus\include;$(ProjectDir)deps-src\xbmc360\libraries\ffmpeg;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_XBOX;NDEBUG;OPENNOW_XDK=1;OPENNOW_HAVE_FFMPEG=1;CONFIG_USE_USRSCTP=0;DISABLE_PEER_SIGNALING=1;CONFIG_IPV6=0;MBEDTLS_CONFIG_FILE="mbedtls_xdk_config.h";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(ProjectDir)lib\Release;$(ProjectDir)deps-src\xbmc360\libraries\ffmpeg\vcproj\libavcodec\Xbox 360\Release;$(ProjectDir)deps-src\xbmc360\libraries\ffmpeg\vcproj\libavutil\Xbox 360\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>peer.lib;srtp2.lib;mbedtls_opennow.lib;cjson.lib;jansson.lib;opus.lib;libavcodec.lib;libavutil.lib;xnet.lib;xapilib.lib;d3d9.lib;xaudio2.lib;xboxkrnl.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\source\app\main_xenon.cpp" />
+    <ClCompile Include="..\source\app\stream_pump.cpp" />
+    <ClCompile Include="..\source\core\input_protocol.cpp" />
+    <ClCompile Include="..\source\core\rtp_h264.cpp" />
+    <ClCompile Include="..\source\gfn\gfn_client.cpp" />
+    <ClCompile Include="..\source\gfn\persistence.cpp" />
+    <ClCompile Include="..\source\media\ffmpeg_h264_decoder.cpp" />
+    <ClCompile Include="..\source\media\opus_audio_decoder.cpp" />
+    <ClCompile Include="..\source\media\yuv_convert.cpp" />
+    <ClCompile Include="..\source\net\ca_bundle.cpp" />
+    <ClCompile Include="..\source\net\http_client.cpp" />
+    <ClCompile Include="..\source\net\tls_stream.cpp" />
+    <ClCompile Include="..\source\net\websocket.cpp" />
+    <ClCompile Include="..\source\platform\logger.cpp" />
+    <ClCompile Include="..\source\platform\xdk_platform.cpp" />
+    <ClCompile Include="..\source\platform\xdk_runtime.cpp" />
+    <ClCompile Include="..\source\webrtc\gfn_sdp.cpp" />
+    <ClCompile Include="..\source\webrtc\webrtc_session.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\include\opennow\*.hpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+ <ItemGroup Label="ProjectConfigurations">
+  <ProjectConfiguration Include="Debug|Xbox 360"><Configuration>Debug</Configuration><Platform>Xbox 360</Platform></ProjectConfiguration>
+  <ProjectConfiguration Include="Release|Xbox 360"><Configuration>Release</Configuration><Platform>Xbox 360</Platform></ProjectConfiguration>
+ </ItemGroup>
+ <PropertyGroup Label="Globals"><ProjectGuid>{183764FA-C676-5B9A-88B8-54D80DD6546D}</ProjectGuid><RootNamespace>jansson</RootNamespace></PropertyGroup>
+ <PropertyGroup><OutDir>$(ProjectDir)..\lib\$(Configuration)\</OutDir><IntDir>$(ProjectDir)..\obj\jansson\$(Configuration)\</IntDir></PropertyGroup>
+ <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.Default.props" />
+ <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="Configuration"><ConfigurationType>StaticLibrary</ConfigurationType><CharacterSet>NotSet</CharacterSet></PropertyGroup>
+ <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="Configuration"><ConfigurationType>StaticLibrary</ConfigurationType><CharacterSet>NotSet</CharacterSet><WholeProgramOptimization>false</WholeProgramOptimization></PropertyGroup>
+ <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.props" />
+ <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+  <ClCompile><AdditionalIncludeDirectories>..\deps-src\jansson\src;..\deps-src\jansson;$(ProjectDir)..\compat;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories><PreprocessorDefinitions>;_XBOX;OPENNOW_XDK=1;%(PreprocessorDefinitions)</PreprocessorDefinitions><CompileAs>CompileAsC</CompileAs><WarningLevel>Level3</WarningLevel><ForcedIncludeFiles>..\compat\opennow_xdk_compat.h;%(ForcedIncludeFiles)</ForcedIncludeFiles></ClCompile>
+ </ItemDefinitionGroup>
+ <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+  <ClCompile><AdditionalIncludeDirectories>..\deps-src\jansson\src;..\deps-src\jansson;$(ProjectDir)..\compat;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories><PreprocessorDefinitions>;_XBOX;OPENNOW_XDK=1;%(PreprocessorDefinitions)</PreprocessorDefinitions><CompileAs>CompileAsC</CompileAs><WarningLevel>Level3</WarningLevel><ForcedIncludeFiles>..\compat\opennow_xdk_compat.h;%(ForcedIncludeFiles)</ForcedIncludeFiles></ClCompile>
+ </ItemDefinitionGroup>
+ <ItemGroup>
+  <ClCompile Include="..\deps-src\jansson\src\dtoa.c" />
+  <ClCompile Include="..\deps-src\jansson\src\dump.c" />
+  <ClCompile Include="..\deps-src\jansson\src\error.c" />
+  <ClCompile Include="..\deps-src\jansson\src\hashtable.c" />
+  <ClCompile Include="..\deps-src\jansson\src\hashtable_seed.c" />
+  <ClCompile Include="..\deps-src\jansson\src\load.c" />
+  <ClCompile Include="..\deps-src\jansson\src\memory.c" />
+  <ClCompile Include="..\deps-src\jansson\src\pack_unpack.c" />
+  <ClCompile Include="..\deps-src\jansson\src\strbuffer.c" />
+  <ClCompile Include="..\deps-src\jansson\src\strconv.c" />
+  <ClCompile Include="..\deps-src\jansson\src\utf.c" />
+  <ClCompile Include="..\deps-src\jansson\src\value.c" />
+  <ClCompile Include="..\deps-src\jansson\src\version.c" />
+ </ItemGroup>
+ <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

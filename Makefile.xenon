@@ -1,0 +1,66 @@
+# OpenNOW-Xenon full native client build.
+# Expected: a LibXenon toolchain plus PowerPC/LibXenon builds of the libraries
+# installed under XENON_PORTLIBS (default: third_party/xenon-prefix).
+.SUFFIXES:
+
+ifeq ($(strip $(DEVKITXENON)),)
+$(error "Please set DEVKITXENON to your devkitXenon toolchain")
+endif
+
+include $(DEVKITXENON)/rules
+
+TARGET      := OpenNOW-Xenon
+BUILD       := build-xenon
+SOURCES     := source/core source/media source/platform source/net source/gfn source/webrtc source/app
+INCLUDES    := include
+XENON_COMPAT := $(CURDIR)/third_party/xenon-compat/include
+XENON_PORTLIBS ?= $(CURDIR)/third_party/xenon-prefix
+
+# Exceptions are intentionally enabled: the GFN/auth/JSON path reports failures
+# with std::runtime_error. RTTI is not needed.
+CFLAGS      = -g -O2 -Wall -Wextra $(MACHDEP) $(INCLUDE) -D__LIBXENON__ \
+              -DOPENNOW_HAVE_FFMPEG=1
+CXXFLAGS    = $(CFLAGS) -std=gnu++17 -fno-rtti
+LDFLAGS     = -g $(MACHDEP) -Wl,--gc-sections -Wl,-Map,$(notdir $@).map
+
+# libpeer's upstream dependency set is srtp2/usrsctp/mbedtls/mbedcrypto/
+# mbedx509/cjson. curl is also used for HTTP and WebSocket signaling; FFmpeg
+# supplies the CPU H.264 decoder and libopus supplies GFN audio decode.
+LIBS        := -lpeer -lcurl -ljansson -lavcodec -lavutil -lopus \
+               -lsrtp2 -lusrsctp -lmbedtls -lmbedx509 -lmbedcrypto -lcjson -lz -lfat -lxenon -lm
+LIBDIRS     := $(XENON_PORTLIBS)
+
+ifneq ($(BUILD),$(notdir $(CURDIR)))
+export OUTPUT := $(CURDIR)/$(TARGET)
+export VPATH := $(foreach dir,$(SOURCES),$(CURDIR)/$(dir))
+export DEPSDIR := $(CURDIR)/$(BUILD)
+
+CFILES   := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
+CPPFILES := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
+
+ifeq ($(strip $(CPPFILES)),)
+export LD := $(CC)
+else
+export LD := $(CXX)
+endif
+
+export OFILES := $(CPPFILES:.cpp=.o) $(CFILES:.c=.o)
+export INCLUDE := $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
+                  -I$(XENON_COMPAT) \
+                  $(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+                  -I$(CURDIR)/$(BUILD) -I$(LIBXENON_INC)
+export LIBPATHS := $(foreach dir,$(LIBDIRS),-L$(dir)/lib) -L$(LIBXENON_LIB)
+
+.PHONY: $(BUILD) clean
+$(BUILD):
+	@[ -d $@ ] || mkdir -p $@
+	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile.xenon
+
+clean:
+	rm -rf $(BUILD) $(OUTPUT).elf $(OUTPUT).elf32 $(OUTPUT).elf.map
+else
+DEPENDS := $(OFILES:.o=.d)
+$(OUTPUT).elf32: $(OUTPUT).elf
+$(OUTPUT).elf: $(OFILES)
+-include $(DEPENDS)
+endif
