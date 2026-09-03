@@ -74,6 +74,13 @@ if ($LASTEXITCODE -ne 0) { throw 'patch-deps.py failed.' }
 & $python (Join-Path $here 'apply-overrides.py') --src $deps
 if ($LASTEXITCODE -ne 0) { throw 'apply-overrides.py failed.' }
 
+# Apply Xbox-specific realtime media changes to the clean Actions checkout.
+# Keeping these transformations in the XDK build overlay avoids changing the
+# desktop/libxenon implementations while making every XEX build deterministic.
+$repoRoot = Split-Path $here -Parent
+& $python (Join-Path $here 'apply-xdk-runtime-fixes.py') --root $repoRoot
+if ($LASTEXITCODE -ne 0) { throw 'apply-xdk-runtime-fixes.py failed.' }
+
 # The bundled dependency tree already carries some XDK fixes. apply-overrides.py
 # also inserts declarations for freshly fetched trees, which can make a second
 # identical declaration when both paths meet. Normalize those exact duplicates
