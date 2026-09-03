@@ -118,18 +118,21 @@ void WebRtcSession::video_loop(){
     }
 }
 void WebRtcSession::audio_loop(){
-    bool primed=false;DWORD next_due=GetTickCount();
+    bool primed=false;
     while(InterlockedCompareExchange(&workers_stop_,0,0)==0){
         size_t queued=0;EnterCriticalSection(&audio_cs_);queued=pending_audio_packets_.size();LeaveCriticalSection(&audio_cs_);
-        if(!primed){if(queued<3){WaitForSingleObject(audio_event_,2);continue;}primed=true;next_due=GetTickCount();}
-        if(queued>12){
-            unsigned dropped=0;EnterCriticalSection(&audio_cs_);if(pending_audio_packets_.size()>6){dropped=(unsigned)(pending_audio_packets_.size()-6);pending_audio_packets_.erase(pending_audio_packets_.begin(),pending_audio_packets_.end()-6);}LeaveCriticalSection(&audio_cs_);
-            if(dropped){audio_input_queue_drops_+=dropped;audio_have_sequence_=false;if(audio_decoder_)audio_decoder_->reset();++audio_resyncs_;ON_LOGW("audio-jitter","trimmed stale compressed audio dropped=%u total=%llu resyncs=%llu",dropped,audio_input_queue_drops_,audio_resyncs_);}
+        if(!primed){
+            if(queued<3){WaitForSingleObject(audio_event_,2);continue;}
+            primed=true;ON_LOGI("audio-jitter","compressed audio primed queued=%u; XAudio owns playback pacing",(unsigned)queued);
         }
-        DWORD now=GetTickCount();if((LONG)(next_due-now)>0){DWORD wait=next_due-now;WaitForSingleObject(audio_event_,wait>5?5:wait);continue;}
-        QueuedAudioPacket q;bool have=false;EnterCriticalSection(&audio_cs_);if(!pending_audio_packets_.empty()){q=pending_audio_packets_[0];pending_audio_packets_.erase(pending_audio_packets_.begin());have=true;}LeaveCriticalSection(&audio_cs_);
-        if(!have){primed=false;++audio_starvations_;if(audio_starvations_<=5||audio_starvations_%50==0)ON_LOGW("audio-jitter","input starvation count=%llu",audio_starvations_);continue;}
-        process_audio_packet(q.data.empty()?NULL:&q.data[0],q.data.size(),q.sequence,q.payload_type);next_due+=10;now=GetTickCount();if((LONG)(now-next_due)>30)next_due=now+10;
+        unsigned drained=0;
+        while(drained<12&&InterlockedCompareExchange(&workers_stop_,0,0)==0){
+            QueuedAudioPacket q;bool have=false;
+            EnterCriticalSection(&audio_cs_);if(!pending_audio_packets_.empty()){q=pending_audio_packets_[0];pending_audio_packets_.erase(pending_audio_packets_.begin());have=true;}LeaveCriticalSection(&audio_cs_);
+            if(!have)break;
+            process_audio_packet(q.data.empty()?NULL:&q.data[0],q.data.size(),q.sequence,q.payload_type);++drained;
+        }
+        if(!drained){WaitForSingleObject(audio_event_,2);}else{Sleep(0);}
     }
 }
 #endif
@@ -267,7 +270,7 @@ bool WebRtcSession::submit_plc(){std::vector<std::int16_t>pcm;int frames=0;if(!a
 void WebRtcSession::process_audio_packet(const std::uint8_t*data,std::size_t size,std::uint16_t sequence,int payload_type){if(!audio_decoder_||!data||!size)return;const uint8_t*opus=data;size_t opus_size=size;if(payload_type==63){size_t header=0,redundant=0,red_lengths[8];int red_count=0;while(header<size&&(data[header]&0x80)!=0){if(size-header<4){++audio_decode_failures_;return;}const size_t block=((size_t)(data[header+2]&0x03)<<8)|data[header+3];if(red_count<8)red_lengths[red_count++]=block;redundant+=block;header+=4;}if(header>=size){++audio_decode_failures_;return;}++header;if(redundant>size-header){++audio_decode_failures_;return;}unsigned missing=0;if(audio_have_sequence_){const int delta=(int)(std::int16_t)(sequence-audio_last_sequence_);if(delta<=0)return;missing=(unsigned)(delta-1);}audio_have_sequence_=true;audio_last_sequence_=sequence;audio_missing_packets_+=missing;unsigned recover=std::min<unsigned>(missing,(unsigned)red_count),unrecovered=missing-recover;if(unrecovered){if(unrecovered<=6){for(unsigned i=0;i<unrecovered;++i)submit_plc();}else{audio_decoder_->reset();++audio_resyncs_;if(audio_resyncs_<=5||audio_resyncs_%50==0)ON_LOGW("audio-recovery","large gap=%u reset decoder resyncs=%llu",missing,audio_resyncs_);}}if(recover){const int first=red_count-(int)recover;size_t block_offset=header;for(int ri=0;ri<first;++ri)block_offset+=red_lengths[ri];for(int ri=first;ri<red_count;++ri){if(block_offset+red_lengths[ri]<=size)submit_opus(data+block_offset,red_lengths[ri],true);block_offset+=red_lengths[ri];}}if(missing&&(audio_recovered_packets_<=8||audio_recovered_packets_%100==0))ON_LOGI("audio-recovery","gap=%u red=%u plc_total=%llu recovered_total=%llu missing_total=%llu",missing,recover,audio_concealed_packets_,audio_recovered_packets_,audio_missing_packets_);opus=data+header+redundant;opus_size=size-header-redundant;}else{unsigned missing=0;if(audio_have_sequence_){const int delta=(int)(std::int16_t)(sequence-audio_last_sequence_);if(delta<=0)return;if(delta>1)missing=(unsigned)(delta-1);}audio_have_sequence_=true;audio_last_sequence_=sequence;audio_missing_packets_+=missing;if(missing){if(missing<=6){for(unsigned i=0;i<missing;++i)submit_plc();}else{audio_decoder_->reset();++audio_resyncs_;}}}if(!opus_size){++audio_decode_failures_;return;}submit_opus(opus,opus_size,false);}
 void WebRtcSession::on_audio(const PeerAudioPacket&p){if(!audio_decoder_||!p.data||!p.size)return;++audio_packets_;
 #if defined(OPENNOW_XDK)
-    QueuedAudioPacket q;q.sequence=p.sequence;q.payload_type=(int)p.payload_type;q.data.assign(p.data,p.data+p.size);EnterCriticalSection(&audio_cs_);if(pending_audio_packets_.size()>=32){unsigned drop=(unsigned)(pending_audio_packets_.size()-15);pending_audio_packets_.erase(pending_audio_packets_.begin(),pending_audio_packets_.begin()+drop);audio_input_queue_drops_+=drop;}pending_audio_packets_.push_back(q);LeaveCriticalSection(&audio_cs_);SetEvent(audio_event_);
+    QueuedAudioPacket q;q.sequence=p.sequence;q.payload_type=(int)p.payload_type;q.data.assign(p.data,p.data+p.size);EnterCriticalSection(&audio_cs_);if(pending_audio_packets_.size()>=64){unsigned drop=(unsigned)(pending_audio_packets_.size()-31);pending_audio_packets_.erase(pending_audio_packets_.begin(),pending_audio_packets_.begin()+drop);audio_input_queue_drops_+=drop;if(audio_input_queue_drops_<=8||audio_input_queue_drops_%100==0)ON_LOGW("audio-jitter","emergency compressed queue trim dropped=%u total=%llu",drop,audio_input_queue_drops_);}pending_audio_packets_.push_back(q);LeaveCriticalSection(&audio_cs_);SetEvent(audio_event_);
 #else
     process_audio_packet(p.data,p.size,p.sequence,(int)p.payload_type);
 #endif
