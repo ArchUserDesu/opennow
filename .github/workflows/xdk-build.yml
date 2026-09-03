@@ -50,6 +50,62 @@ jobs:
             xdk/bin/Release/default.xex
             xdk/bin/Release/cacert.pem
 
+      - name: Deploy XEX to Xbox and verify SHA-256
+        if: success()
+        shell: powershell
+        env:
+          XBOX_FTP_PASSWORD_SECRET: ${{ secrets.XBOX_FTP_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $password = $env:XBOX_FTP_PASSWORD_SECRET
+          if (-not $password) { $password = $env:XBOX_FTP_PASSWORD }
+          if (-not $password) {
+            Write-Warning 'Automatic Xbox deployment skipped: set GitHub Actions secret XBOX_FTP_PASSWORD or XBOX_FTP_PASSWORD on the self-hosted runner.'
+            exit 0
+          }
+
+          $local = (Resolve-Path '.\xdk\bin\Release\default.xex').Path
+          $uri = 'ftp://192.168.2.204/Hdd1/Homebrew/default.xex'
+          $credential = New-Object System.Net.NetworkCredential('xbox', $password)
+
+          $bytes = [System.IO.File]::ReadAllBytes($local)
+          $request = [System.Net.FtpWebRequest]::Create($uri)
+          $request.Method = [System.Net.WebRequestMethods+Ftp]::UploadFile
+          $request.Credentials = $credential
+          $request.UseBinary = $true
+          $request.UsePassive = $true
+          $request.KeepAlive = $false
+          $request.ContentLength = $bytes.Length
+          $stream = $request.GetRequestStream()
+          try { $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
+          $response = $request.GetResponse()
+          try { Write-Host ('FTP upload: ' + $response.StatusDescription.Trim()) } finally { $response.Dispose() }
+
+          $verifyPath = Join-Path $env:RUNNER_TEMP 'default.xex.remote'
+          $download = [System.Net.FtpWebRequest]::Create($uri)
+          $download.Method = [System.Net.WebRequestMethods+Ftp]::DownloadFile
+          $download.Credentials = $credential
+          $download.UseBinary = $true
+          $download.UsePassive = $true
+          $download.KeepAlive = $false
+          $downloadResponse = $download.GetResponse()
+          try {
+            $input = $downloadResponse.GetResponseStream()
+            try {
+              $output = [System.IO.File]::Create($verifyPath)
+              try { $input.CopyTo($output) } finally { $output.Dispose() }
+            } finally { $input.Dispose() }
+          } finally { $downloadResponse.Dispose() }
+
+          $localHash = (Get-FileHash -Algorithm SHA256 $local).Hash
+          $remoteHash = (Get-FileHash -Algorithm SHA256 $verifyPath).Hash
+          Write-Host "Local SHA-256 : $localHash"
+          Write-Host "Remote SHA-256: $remoteHash"
+          if ($localHash -ne $remoteHash) {
+            throw 'Xbox deployment hash mismatch.'
+          }
+          Write-Host 'Xbox deployment verified successfully.'
+
       - name: Publish build status
         if: always()
         continue-on-error: true
