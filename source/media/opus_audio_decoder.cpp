@@ -4,6 +4,24 @@ extern "C" {
 #include <opus.h>
 }
 namespace opennow {
+namespace {
+#if defined(OPENNOW_XDK)
+void prepare_xdk_pcm_bytes(std::vector<std::int16_t>& pcm) {
+    /* Xenon is big-endian.  XAudio2's Xbox 360 documentation explicitly warns
+       that XAUDIO2_BUFFER sample data may need byte swapping on Xbox 360.
+       The platform backend currently serializes the numeric int16 value as
+       little-endian bytes, so swap the numeric value here; that makes the bytes
+       handed to the Xbox source voice equal to the decoder's native big-endian
+       PCM representation. */
+    for (std::size_t i=0;i<pcm.size();++i) {
+        const std::uint16_t u=(std::uint16_t)pcm[i];
+        pcm[i]=(std::int16_t)((u>>8)|(u<<8));
+    }
+}
+#else
+void prepare_xdk_pcm_bytes(std::vector<std::int16_t>&) {}
+#endif
+}
 class OpusAudioDecoder : public AudioDecoder {
 public:
     OpusAudioDecoder():dec_(NULL),rate_(48000),channels_(2),decode_count_(0),decoded_frames_total_(0){}
@@ -32,6 +50,10 @@ public:
             const int l0=samples>0?(int)pcm[0]:0,r0=samples>1?(int)pcm[1]:0,l1=samples>2?(int)pcm[2]:0,r1=samples>3?(int)pcm[3]:0;
             ON_LOGI("audio-pcm","decode=%llu packet_bytes=%u frames=%d total_pcm_ms=%llu min=%d max=%d avg_abs=%u zero_cross=%u first_lr=%d,%d next_lr=%d,%d",decode_count_,(unsigned)bytes,n,(decoded_frames_total_*1000ULL)/(unsigned long long)rate_,mn,mx,avg_abs,zero_cross,l0,r0,l1,r1);
         }
+#if defined(OPENNOW_XDK)
+        if(decode_count_==1)ON_LOGI("audio-pcm-byteorder","bridge=opus_native_s16be_to_xaudio360 byteswap_before_le_serializer samples=%u",(unsigned)pcm.size());
+#endif
+        prepare_xdk_pcm_bytes(pcm);
         return true;
     }
     bool conceal(int frame_count,std::vector<std::int16_t>& pcm,int& frames){
@@ -39,7 +61,7 @@ public:
         pcm.resize((std::size_t)frame_count*(std::size_t)channels_);
         int n=opus_decode(dec_,NULL,0,&pcm[0],frame_count,0);
         if(n<0){ON_LOGE("audio-decode","opus PLC failed err=%d text=%s",n,opus_strerror(n));pcm.clear();return false;}
-        frames=n;pcm.resize((std::size_t)n*(std::size_t)channels_);return true;
+        frames=n;pcm.resize((std::size_t)n*(std::size_t)channels_);prepare_xdk_pcm_bytes(pcm);return true;
     }
     void reset(){if(dec_){ON_LOGW("audio-decode","Opus decoder state reset after decode_count=%llu total_pcm_ms=%llu",decode_count_,(decoded_frames_total_*1000ULL)/(unsigned long long)rate_);opus_decoder_ctl(dec_,OPUS_RESET_STATE);}}
 private:
