@@ -53,20 +53,11 @@ jobs:
       - name: Deploy XEX to Xbox and verify SHA-256
         if: success()
         shell: powershell
-        env:
-          XBOX_FTP_PASSWORD_SECRET: ${{ secrets.XBOX_FTP_PASSWORD }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $password = $env:XBOX_FTP_PASSWORD_SECRET
-          if (-not $password) { $password = $env:XBOX_FTP_PASSWORD }
-          if (-not $password) {
-            Write-Warning 'Automatic Xbox deployment skipped: set GitHub Actions secret XBOX_FTP_PASSWORD or XBOX_FTP_PASSWORD on the self-hosted runner.'
-            exit 0
-          }
-
           $local = (Resolve-Path '.\xdk\bin\Release\default.xex').Path
           $uri = 'ftp://192.168.2.204/Hdd1/Homebrew/default.xex'
-          $credential = New-Object System.Net.NetworkCredential('xbox', $password)
+          $credential = New-Object System.Net.NetworkCredential('xbox', '1234')
 
           $bytes = [System.IO.File]::ReadAllBytes($local)
           $request = [System.Net.FtpWebRequest]::Create($uri)
