@@ -6,6 +6,10 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: xdk-build-main
+  cancel-in-progress: true
+
 permissions:
   contents: read
   issues: write
@@ -86,7 +90,7 @@ jobs:
             } catch [System.Net.WebException] {
               $resp = $_.Exception.Response
               if ($resp -and [int]$resp.StatusCode -eq 550) {
-                Write-Host "FTP delete skipped (missing or unavailable): $Uri"
+                Write-Host "FTP delete skipped (missing, locked, or unavailable): $Uri"
                 if ($resp) { $resp.Dispose() }
                 return $false
               }
@@ -130,14 +134,24 @@ jobs:
             }
           }
 
-          # Prove that login/path/passive data transfer work before modifying anything.
+          function Invoke-DirectReplacement {
+            Write-Host 'Using direct Xbox FTP replacement path.'
+            $deleted = Invoke-FtpDeleteIfExists $targetUri
+            if (-not $deleted) {
+              Write-Warning 'Existing default.xex could not be deleted. If the title is running, exit it before deployment.'
+            }
+            Invoke-FtpUpload $targetUri $local
+            Assert-FtpHash $targetUri $localHash 'deployed-XEX'
+          }
+
+          # Prove login/path/passive data transfer before modifying anything.
           $list = New-FtpRequest $baseUri ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
           $listResp = $list.GetResponse()
           try {
             $reader = New-Object System.IO.StreamReader($listResp.GetResponseStream())
             try {
               $entries = $reader.ReadToEnd()
-              Write-Host "FTP directory listing for Hdd1/Homebrew:"
+              Write-Host 'FTP directory listing for Hdd1/Homebrew:'
               Write-Host $entries
             } finally { $reader.Dispose() }
           } finally { $listResp.Dispose() }
@@ -145,33 +159,46 @@ jobs:
           Write-Host "Local XEX: $localSize bytes"
           Write-Host "Local SHA-256: $localHash"
 
-          # Never stream directly over the live target. Upload and verify a sidecar first.
-          Invoke-FtpDeleteIfExists $tempUri | Out-Null
-          Invoke-FtpUpload $tempUri $local
-          Assert-FtpHash $tempUri $localHash 'staged-XEX'
-
-          $promoted = $false
+          $staged = $false
           try {
-            # Preferred path: remove old target and atomically rename the verified sidecar.
-            Invoke-FtpDeleteIfExists $targetUri | Out-Null
-            $rename = New-FtpRequest $tempUri ([System.Net.WebRequestMethods+Ftp]::Rename)
-            $rename.RenameTo = $targetName
-            $renameResp = $rename.GetResponse()
-            try { Write-Host ('FTP rename: ' + $renameResp.StatusDescription.Trim()) } finally { $renameResp.Dispose() }
-            $promoted = $true
-          } catch {
-            Write-Warning ('FTP rename promotion failed; trying direct replacement fallback. ' + $_.Exception.Message)
-          }
-
-          if (-not $promoted) {
-            # Some Xbox FTP servers do not implement RNFR/RNTO correctly. Since the staged
-            # file is already hash-verified, fall back to delete + fresh STOR of the target.
-            Invoke-FtpDeleteIfExists $targetUri | Out-Null
-            Invoke-FtpUpload $targetUri $local
             Invoke-FtpDeleteIfExists $tempUri | Out-Null
+            Invoke-FtpUpload $tempUri $local
+            Assert-FtpHash $tempUri $localHash 'staged-XEX'
+            $staged = $true
+          } catch [System.Net.WebException] {
+            $resp = $_.Exception.Response
+            $code = if ($resp) { [int]$resp.StatusCode } else { 0 }
+            if ($resp) { $resp.Dispose() }
+            if ($code -eq 550) {
+              Write-Warning 'Xbox FTP rejected the sidecar filename with 550; falling back to direct replacement.'
+            } else {
+              throw
+            }
           }
 
-          Assert-FtpHash $targetUri $localHash 'deployed-XEX'
+          if ($staged) {
+            $promoted = $false
+            try {
+              Invoke-FtpDeleteIfExists $targetUri | Out-Null
+              $rename = New-FtpRequest $tempUri ([System.Net.WebRequestMethods+Ftp]::Rename)
+              $rename.RenameTo = $targetName
+              $renameResp = $rename.GetResponse()
+              try { Write-Host ('FTP rename: ' + $renameResp.StatusDescription.Trim()) } finally { $renameResp.Dispose() }
+              $promoted = $true
+            } catch {
+              Write-Warning ('FTP rename promotion failed; trying direct replacement. ' + $_.Exception.Message)
+            }
+
+            if (-not $promoted) {
+              Invoke-DirectReplacement
+              Invoke-FtpDeleteIfExists $tempUri | Out-Null
+            } else {
+              Assert-FtpHash $targetUri $localHash 'deployed-XEX'
+            }
+          } else {
+            Invoke-DirectReplacement
+          }
+
           Write-Host 'Xbox deployment verified successfully.'
 
       - name: Publish build status
