@@ -33,6 +33,9 @@ def main():
 #endif
     case AF_INET:
 ''')
+    # Make both bundled and freshly-fetched libpeer trees C89-safe.  Do the
+    # assignment rewrite as well as the declaration insertion so this remains
+    # idempotent when a prior commit already split candidate-count increments.
     replace(agent,
 '''  StunMessage recv_msg;
   memset(&send_msg, 0, sizeof(send_msg));
@@ -40,6 +43,11 @@ def main():
 '''  StunMessage recv_msg;
   IceCandidate* ice_candidate;
   memset(&send_msg, 0, sizeof(send_msg));
+''')
+    replace(agent,
+'''  IceCandidate* ice_candidate = agent->local_candidates + agent->local_candidates_count;
+''',
+'''  ice_candidate = agent->local_candidates + agent->local_candidates_count;
 ''')
     replace(agent,
 '''  memcpy(&bind_addr, &recv_msg.mapped_addr, sizeof(Address));
