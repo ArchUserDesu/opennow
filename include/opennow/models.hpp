@@ -13,7 +13,9 @@ struct GameVariant { std::string id,store,internal_title; bool selected; GameVar
 struct GameInfo { std::string id,title,publisher,image_url,launch_app_id,store,internal_title; std::vector<GameVariant> variants; bool in_library; GameInfo():in_library(false){} };
 struct IceServerInfo { std::string url,username,credential; IceServerInfo(){} IceServerInfo(const std::string&u,const std::string&n,const std::string&c):url(u),username(n),credential(c){} };
 struct SessionInfo { std::string session_id; int status,queue_position; bool app_patching; std::string session_token,server_ip,signaling_url,media_ip; int media_port; std::vector<IceServerInfo> ice_servers; SessionInfo():status(-1),queue_position(0),app_patching(false),media_port(0){} };
-// Xbox 360 balanced-quality profile: keep the decoupled low-latency worker architecture and
-// request the same 720p60 / 12 Mbps class used by the working Switch balanced preset.
-struct StreamConfig { int width,height,fps,bitrate_kbps; bool persist_game_settings; StreamConfig():width(1280),height(720),fps(60),bitrate_kbps(12000),persist_game_settings(true){} };
+// Xbox 360 software H.264 decoder profile.  At 60 fps Xenon spends more than
+// one frame interval decoding each 720p access unit and discards most of the
+// stream.  720p30 keeps the 12 Mbps quality budget while doubling bits/frame
+// and gives the decoder a realistic latency target.
+struct StreamConfig { int width,height,fps,bitrate_kbps; bool persist_game_settings; StreamConfig():width(1280),height(720),fps(30),bitrate_kbps(12000),persist_game_settings(true){} };
 }
