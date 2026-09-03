@@ -18,18 +18,10 @@ jobs:
     steps:
       - name: Fetch latest OpenNOW log from Xbox
         shell: powershell
-        env:
-          XBOX_FTP_PASSWORD_SECRET: ${{ secrets.XBOX_FTP_PASSWORD }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $password = $env:XBOX_FTP_PASSWORD_SECRET
-          if (-not $password) { $password = $env:XBOX_FTP_PASSWORD }
-          if (-not $password) {
-            throw 'Set GitHub Actions secret XBOX_FTP_PASSWORD or XBOX_FTP_PASSWORD on the self-hosted runner.'
-          }
-
           $uri = 'ftp://192.168.2.204/Hdd1/Homebrew/opennow.log'
-          $credential = New-Object System.Net.NetworkCredential('xbox', $password)
+          $credential = New-Object System.Net.NetworkCredential('xbox', '1234')
           $dest = Join-Path $env:GITHUB_WORKSPACE 'opennow.log'
 
           $request = [System.Net.FtpWebRequest]::Create($uri)
