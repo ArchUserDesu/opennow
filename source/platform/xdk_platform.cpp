@@ -52,6 +52,7 @@ IXAudio2MasteringVoice* g_master_voice = NULL;
 IXAudio2SourceVoice* g_source_voice = NULL;
 bool g_voice_started = false;
 unsigned g_audio_submissions = 0, g_audio_underruns = 0, g_audio_queue_drops = 0;
+volatile LONG g_audio_buffers_ended = 0;
 
 struct AudioSlot {
     std::vector<BYTE> bytes;
@@ -67,7 +68,7 @@ public:
     STDMETHOD_(void, OnVoiceProcessingPassEnd)() {}
     STDMETHOD_(void, OnStreamEnd)() {}
     STDMETHOD_(void, OnBufferStart)(void*) {}
-    STDMETHOD_(void, OnBufferEnd)(void* context) { AudioSlot* s = static_cast<AudioSlot*>(context); if (s) InterlockedExchange(&s->in_use, 0); }
+    STDMETHOD_(void, OnBufferEnd)(void* context) { AudioSlot* s = static_cast<AudioSlot*>(context); if (s) InterlockedExchange(&s->in_use, 0); InterlockedIncrement(&g_audio_buffers_ended); }
     STDMETHOD_(void, OnLoopEnd)(void*) {}
     STDMETHOD_(void, OnVoiceError)(void* context, HRESULT) { AudioSlot* s = static_cast<AudioSlot*>(context); if (s) InterlockedExchange(&s->in_use, 0); }
 };
@@ -237,7 +238,7 @@ bool init_audio() {
     HRESULT hr=XAudio2Create(&g_xaudio,0,XAUDIO2_DEFAULT_PROCESSOR); if(FAILED(hr)||!g_xaudio){ON_LOGE("xdk-audio","XAudio2Create failed hr=0x%08x engine=%p",(unsigned)hr,g_xaudio);return false;}
     hr=g_xaudio->CreateMasteringVoice(&g_master_voice,2,48000); if(FAILED(hr)){ON_LOGE("xdk-audio","CreateMasteringVoice failed hr=0x%08x",(unsigned)hr);return false;}
     WAVEFORMATEX fmt; ZeroMemory(&fmt,sizeof(fmt)); fmt.wFormatTag=WAVE_FORMAT_PCM;fmt.nChannels=2;fmt.nSamplesPerSec=48000;fmt.wBitsPerSample=16;fmt.nBlockAlign=4;fmt.nAvgBytesPerSec=192000;
-    hr=g_xaudio->CreateSourceVoice(&g_source_voice,&fmt,0,XAUDIO2_DEFAULT_FREQ_RATIO,&g_voice_callback,NULL,NULL);if(FAILED(hr)||!g_source_voice){ON_LOGE("xdk-audio","CreateSourceVoice failed hr=0x%08x voice=%p",(unsigned)hr,g_source_voice);return false;}g_voice_started=false;ON_LOGI("xdk-audio","initialization complete engine=%p voice=%p prebuffer_packets=4 max_queue=8",g_xaudio,g_source_voice);return true;
+    hr=g_xaudio->CreateSourceVoice(&g_source_voice,&fmt,0,XAUDIO2_DEFAULT_FREQ_RATIO,&g_voice_callback,NULL,NULL);if(FAILED(hr)||!g_source_voice){ON_LOGE("xdk-audio","CreateSourceVoice failed hr=0x%08x voice=%p",(unsigned)hr,g_source_voice);return false;}g_voice_started=false;InterlockedExchange(&g_audio_buffers_ended,0);ON_LOGI("xdk-audio","initialization complete engine=%p voice=%p prebuffer_packets=4 max_queue=8 nonblocking_submit=1 format=pcm_s16le rate=48000 channels=2 block_align=4",g_xaudio,g_source_voice);return true;
 }
 
 bool init_network() {
@@ -261,20 +262,19 @@ bool XenonPlatform::present(const VideoFrame& f){if(!g_device||f.width<=0||f.hei
 bool XenonPlatform::play_pcm48_stereo(const std::int16_t* pcm,std::size_t frames){
     if(!g_source_voice||!pcm||!frames)return false;
     XAUDIO2_VOICE_STATE before;ZeroMemory(&before,sizeof(before));g_source_voice->GetState(&before);
-    if(g_voice_started&&before.BuffersQueued==0){++g_audio_underruns;if(g_audio_underruns<=5||g_audio_underruns%50==0)ON_LOGW("xdk-audio","playback starvation count=%u; keeping source voice running",g_audio_underruns);}
-    DWORD wait_start=GetTickCount();
-    while(before.BuffersQueued>=8&&GetTickCount()-wait_start<25){Sleep(1);ZeroMemory(&before,sizeof(before));g_source_voice->GetState(&before);}
-    if(before.BuffersQueued>=8){++g_audio_queue_drops;if(g_audio_queue_drops<=5||g_audio_queue_drops%50==0)ON_LOGW("xdk-audio","output throttle timeout dropped packet count=%u queued=%u",g_audio_queue_drops,(unsigned)before.BuffersQueued);return false;}
-    AudioSlot*slot=NULL;unsigned count=sizeof(g_audio_slots)/sizeof(g_audio_slots[0]);for(unsigned i=0;i<count;++i){AudioSlot&c=g_audio_slots[(g_audio_cursor+i)%count];if(InterlockedCompareExchange(&c.in_use,1,0)==0){slot=&c;g_audio_cursor=(g_audio_cursor+i+1)%count;break;}}if(!slot)return false;
+    if(g_voice_started&&before.BuffersQueued==0){++g_audio_underruns;if(g_audio_underruns<=5||g_audio_underruns%50==0)ON_LOGW("xdk-audio","playback starvation count=%u ended=%ld submissions=%u; source voice remains running",g_audio_underruns,(long)InterlockedCompareExchange(&g_audio_buffers_ended,0,0),g_audio_submissions);}
+    /* Never sleep in the RTP/audio worker. A 25 ms wait here made a 10 ms packet
+       stream mathematically unable to catch up, causing jitter overflow -> fake
+       packet loss -> RED/PLC overproduction -> continuous noise. */
+    if(before.BuffersQueued>=8){++g_audio_queue_drops;if(g_audio_queue_drops<=8||g_audio_queue_drops%100==0)ON_LOGW("xdk-audio","hardware queue full; nonblocking PCM drop count=%u queued=%u ended=%ld submissions=%u",g_audio_queue_drops,(unsigned)before.BuffersQueued,(long)InterlockedCompareExchange(&g_audio_buffers_ended,0,0),g_audio_submissions);return false;}
+    AudioSlot*slot=NULL;unsigned count=sizeof(g_audio_slots)/sizeof(g_audio_slots[0]);for(unsigned i=0;i<count;++i){AudioSlot&c=g_audio_slots[(g_audio_cursor+i)%count];if(InterlockedCompareExchange(&c.in_use,1,0)==0){slot=&c;g_audio_cursor=(g_audio_cursor+i+1)%count;break;}}if(!slot){++g_audio_queue_drops;if(g_audio_queue_drops<=8||g_audio_queue_drops%100==0)ON_LOGW("xdk-audio","no free AudioSlot nonblocking_drop=%u ended=%ld",g_audio_queue_drops,(long)InterlockedCompareExchange(&g_audio_buffers_ended,0,0));return false;}
     std::size_t bytes=frames*4;slot->bytes.resize(bytes);
-    /* XAudio2 on Xbox 360 expects the same little-endian PCM payload bytes as Windows;
-       only container/header metadata needs endian handling. Serialize explicitly because
-       Xenon's CPU-native int16 representation is big-endian. */
     for(std::size_t i=0;i<frames*2;++i){std::uint16_t v=(std::uint16_t)pcm[i];slot->bytes[i*2]=(BYTE)(v&255);slot->bytes[i*2+1]=(BYTE)(v>>8);}
-    XAUDIO2_BUFFER b;ZeroMemory(&b,sizeof(b));b.AudioBytes=(UINT32)slot->bytes.size();b.pAudioData=&slot->bytes[0];b.pContext=slot;HRESULT hr=g_source_voice->SubmitSourceBuffer(&b);if(FAILED(hr)){InterlockedExchange(&slot->in_use,0);return false;}
+    XAUDIO2_BUFFER b;ZeroMemory(&b,sizeof(b));b.AudioBytes=(UINT32)slot->bytes.size();b.pAudioData=&slot->bytes[0];b.pContext=slot;HRESULT hr=g_source_voice->SubmitSourceBuffer(&b);if(FAILED(hr)){InterlockedExchange(&slot->in_use,0);ON_LOGE("xdk-audio","SubmitSourceBuffer failed hr=0x%08x frames=%u queued_before=%u",(unsigned)hr,(unsigned)frames,(unsigned)before.BuffersQueued);return false;}
     ++g_audio_submissions;XAUDIO2_VOICE_STATE after;ZeroMemory(&after,sizeof(after));g_source_voice->GetState(&after);
     if(!g_voice_started&&after.BuffersQueued>=4){hr=g_source_voice->Start(0);if(FAILED(hr)){ON_LOGE("xdk-audio","source voice start failed hr=0x%08x",(unsigned)hr);return false;}g_voice_started=true;ON_LOGI("xdk-audio","playback started queued=%u submissions=%u",(unsigned)after.BuffersQueued,g_audio_submissions);}
-    if(g_audio_submissions==1||g_audio_submissions%1000==0)ON_LOGI("xdk-audio","PCM submit count=%u frames=%u queued=%u first_sample=%d",g_audio_submissions,(unsigned)frames,(unsigned)after.BuffersQueued,(int)pcm[0]);return true;
+    if(g_audio_submissions<=4||g_audio_submissions%500==0){int mn=32767,mx=-32768;unsigned long long abs_sum=0;for(std::size_t i=0;i<frames*2;++i){int v=(int)pcm[i];if(v<mn)mn=v;if(v>mx)mx=v;abs_sum+=(unsigned long long)(v<0?-v:v);}unsigned avg_abs=frames?(unsigned)(abs_sum/(frames*2)):0;ON_LOGI("xdk-audio-pcm","submit=%u frames=%u queued=%u ended=%ld min=%d max=%d avg_abs=%u first_lr=%d,%d bytes=%02x %02x %02x %02x %02x %02x %02x %02x",g_audio_submissions,(unsigned)frames,(unsigned)after.BuffersQueued,(long)InterlockedCompareExchange(&g_audio_buffers_ended,0,0),mn,mx,avg_abs,(int)pcm[0],frames*2>1?(int)pcm[1]:0,slot->bytes.size()>0?slot->bytes[0]:0,slot->bytes.size()>1?slot->bytes[1]:0,slot->bytes.size()>2?slot->bytes[2]:0,slot->bytes.size()>3?slot->bytes[3]:0,slot->bytes.size()>4?slot->bytes[4]:0,slot->bytes.size()>5?slot->bytes[5]:0,slot->bytes.size()>6?slot->bytes[6]:0,slot->bytes.size()>7?slot->bytes[7]:0);}
+    return true;
 }
 void XenonPlatform::log(const char*s){ON_LOGI("platform","%s",s?s:"");}
 void XenonPlatform::clear_text(){g_have_video_frame=false;g_text.clear();render_text();}
