@@ -36,30 +36,17 @@ private:
     FFmpegH264Decoder(const FFmpegH264Decoder&);
     FFmpegH264Decoder& operator=(const FFmpegH264Decoder&);
 public:
-    ~FFmpegH264Decoder() {
-        free_frame();
-        free_context();
-    }
+    ~FFmpegH264Decoder() { free_frame(); free_context(); }
 
     bool open(int width, int height, int fps) {
         (void)fps;
-        free_frame();
-        free_context();
-        decoded_count_=0;
-        register_h264_decoder();
+        free_frame(); free_context(); decoded_count_=0; register_h264_decoder();
         const AVCodec* codec = avcodec_find_decoder(AV_CODEC_ID_H264);
         ON_LOGI("video-decode", "FFmpeg H.264 open begin version=%u target=%dx%d fps=%d",(unsigned)LIBAVCODEC_VERSION_MAJOR,width,height,fps);
-        if (!codec) {
-            ON_LOGE("video-decode","avcodec_find_decoder H264 returned null");
-            return false;
-        }
-
+        if (!codec) { ON_LOGE("video-decode","avcodec_find_decoder H264 returned null"); return false; }
         ctx_ = avcodec_alloc_context3(codec);
         ON_LOGD("video-decode", "context allocation returned ptr=%p",ctx_);
-        if(!ctx_) {
-            ON_LOGE("video-decode","avcodec_alloc_context3 failed");
-            return false;
-        }
+        if(!ctx_) { ON_LOGE("video-decode","avcodec_alloc_context3 failed"); return false; }
 #if LIBAVCODEC_VERSION_MAJOR < 56
         ctx_->flags |= CODEC_FLAG_LOW_DELAY;
         ctx_->flags2 |= CODEC_FLAG2_FAST;
@@ -67,14 +54,12 @@ public:
         ctx_->flags |= AV_CODEC_FLAG_LOW_DELAY;
         ctx_->flags2 |= AV_CODEC_FLAG2_FAST;
 #endif
-        ctx_->thread_count=1;
-        ctx_->thread_type=0;
-        /* Keep the separate decoder worker, but restore normal H.264 deblocking.
-           Disabling it made low/medium bitrate 720p visibly blocky even when the
-           server supplied the requested resolution. */
-        ctx_->skip_loop_filter=AVDISCARD_DEFAULT;
-        ctx_->width=width;
-        ctx_->height=height;
+        ctx_->thread_count=1; ctx_->thread_type=0;
+        /* The latest runtime log showed normal deblocking pushing 720p decode
+           to 51-72 ms/frame and causing thousands of access-unit drops.  Keep
+           the dedicated decoder worker but restore the proven fast Xenon path. */
+        ctx_->skip_loop_filter=AVDISCARD_ALL;
+        ctx_->width=width; ctx_->height=height;
 #if LIBAVCODEC_VERSION_MAJOR < 55
         frame_=avcodec_alloc_frame();
 #else
@@ -101,13 +86,12 @@ public:
         const int rc=avcodec_receive_frame(ctx_,frame_);
         if(rc<0)return false;
 #endif
-        ++decoded_count_;
-        out.width=frame_->width;out.height=frame_->height;out.pts=frame_->pts;
+        ++decoded_count_; out.width=frame_->width;out.height=frame_->height;out.pts=frame_->pts;
         if(decoded_count_<=4||decoded_count_%300==0){
-            ON_LOGI("video-frame","decoded=%llu coded_bytes=%u actual=%dx%d format=%d linesize=%d,%d,%d",decoded_count_,(unsigned)size,frame_->width,frame_->height,frame_->format,frame_->linesize[0],frame_->linesize[1],frame_->linesize[2]);
+            ON_LOGI("video-frame","decoded=%llu coded_bytes=%u actual=%dx%d format=%d linesize=%d,%d,%d range=%s",decoded_count_,(unsigned)size,frame_->width,frame_->height,frame_->format,frame_->linesize[0],frame_->linesize[1],frame_->linesize[2],frame_->format==AV_PIX_FMT_YUVJ420P?"full":"limited");
         }
         if(frame_->format==AV_PIX_FMT_YUV420P||frame_->format==AV_PIX_FMT_YUVJ420P){
-            out.format=PixelFormat_YUV420P;
+            out.format=frame_->format==AV_PIX_FMT_YUVJ420P?PixelFormat_YUV420P_FULL:PixelFormat_YUV420P;
             for(int plane=0;plane<3;++plane){
                 const int plane_height=plane==0?out.height:(out.height+1)/2;
                 const int plane_width=plane==0?out.width:(out.width+1)/2;
