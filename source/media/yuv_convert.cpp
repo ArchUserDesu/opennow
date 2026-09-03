@@ -11,10 +11,21 @@ inline int clamp8_fast(int value) {
     return value < 0 ? 0 : 255;
 }
 
-inline std::uint32_t pack_yuv(int yy, int red_chroma, int green_chroma, int blue_chroma) {
+inline std::uint32_t pack_yuv_limited(int yy, int red_chroma, int green_chroma, int blue_chroma) {
     int c = yy - 16;
     if (c < 0) c = 0;
     const int lum = 298 * c;
+    const int r = clamp8_fast((lum + red_chroma) >> 8);
+    const int g = clamp8_fast((lum + green_chroma) >> 8);
+    const int b = clamp8_fast((lum + blue_chroma) >> 8);
+    return 0xff000000u |
+        (static_cast<std::uint32_t>(r) << 16) |
+        (static_cast<std::uint32_t>(g) << 8) |
+        static_cast<std::uint32_t>(b);
+}
+
+inline std::uint32_t pack_yuv_full(int yy, int red_chroma, int green_chroma, int blue_chroma) {
+    const int lum = 256 * yy;
     const int r = clamp8_fast((lum + red_chroma) >> 8);
     const int g = clamp8_fast((lum + green_chroma) >> 8);
     const int b = clamp8_fast((lum + blue_chroma) >> 8);
@@ -58,7 +69,9 @@ bool to_argb8888(const VideoFrame& frame, std::vector<std::uint32_t>& out) {
         return true;
     }
 
-    const bool planar = frame.format == PixelFormat_YUV420P;
+    const bool planar_limited = frame.format == PixelFormat_YUV420P;
+    const bool planar_full = frame.format == PixelFormat_YUV420P_FULL;
+    const bool planar = planar_limited || planar_full;
     const bool nv12 = frame.format == PixelFormat_NV12;
     if (!planar && !nv12) return false;
 
@@ -72,9 +85,6 @@ bool to_argb8888(const VideoFrame& frame, std::vector<std::uint32_t>& out) {
         if (!has_plane_bytes(frame.plane[1], frame.stride[1], chroma_height, chroma_width * 2)) return false;
     }
 
-    /* Hot Xbox path: process one chroma sample into a 2x2 luma block and write
-       four pixels directly. This removes the inner dx/dy loops and repeated
-       vector indexing from the previous converter. */
     for (int cy = 0; cy < chroma_height; ++cy) {
         const int y0 = cy << 1;
         const int y1 = y0 + 1;
@@ -90,24 +100,35 @@ bool to_argb8888(const VideoFrame& frame, std::vector<std::uint32_t>& out) {
             const int x0 = cx << 1;
             const int x1 = x0 + 1;
             int uu, vv;
-            if (planar) {
-                uu = urow[cx];
-                vv = vrow[cx];
-            } else {
-                uu = uvrow[cx * 2];
-                vv = uvrow[cx * 2 + 1];
-            }
+            if (planar) { uu = urow[cx]; vv = vrow[cx]; }
+            else { uu = uvrow[cx * 2]; vv = uvrow[cx * 2 + 1]; }
             const int d = uu - 128;
             const int e = vv - 128;
-            const int red_chroma = 409 * e + 128;
-            const int green_chroma = -100 * d - 208 * e + 128;
-            const int blue_chroma = 516 * d + 128;
+            int red_chroma, green_chroma, blue_chroma;
+            if (planar_full) {
+                red_chroma = 359 * e + 128;
+                green_chroma = -88 * d - 183 * e + 128;
+                blue_chroma = 454 * d + 128;
+            } else {
+                red_chroma = 409 * e + 128;
+                green_chroma = -100 * d - 208 * e + 128;
+                blue_chroma = 516 * d + 128;
+            }
 
-            out0[x0] = pack_yuv(yrow0[x0], red_chroma, green_chroma, blue_chroma);
-            if (x1 < width) out0[x1] = pack_yuv(yrow0[x1], red_chroma, green_chroma, blue_chroma);
-            if (out1) {
-                out1[x0] = pack_yuv(yrow1[x0], red_chroma, green_chroma, blue_chroma);
-                if (x1 < width) out1[x1] = pack_yuv(yrow1[x1], red_chroma, green_chroma, blue_chroma);
+            if (planar_full) {
+                out0[x0] = pack_yuv_full(yrow0[x0], red_chroma, green_chroma, blue_chroma);
+                if (x1 < width) out0[x1] = pack_yuv_full(yrow0[x1], red_chroma, green_chroma, blue_chroma);
+                if (out1) {
+                    out1[x0] = pack_yuv_full(yrow1[x0], red_chroma, green_chroma, blue_chroma);
+                    if (x1 < width) out1[x1] = pack_yuv_full(yrow1[x1], red_chroma, green_chroma, blue_chroma);
+                }
+            } else {
+                out0[x0] = pack_yuv_limited(yrow0[x0], red_chroma, green_chroma, blue_chroma);
+                if (x1 < width) out0[x1] = pack_yuv_limited(yrow0[x1], red_chroma, green_chroma, blue_chroma);
+                if (out1) {
+                    out1[x0] = pack_yuv_limited(yrow1[x0], red_chroma, green_chroma, blue_chroma);
+                    if (x1 < width) out1[x1] = pack_yuv_limited(yrow1[x1], red_chroma, green_chroma, blue_chroma);
+                }
             }
         }
     }
