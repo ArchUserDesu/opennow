@@ -64,7 +64,6 @@ if ($RefreshDeps) {
   throw ('-SkipFetch was specified but xdk\deps-src is incomplete. Missing: ' + ($missingDeps -join ', '))
 }
 
-# Recheck after any fetch and fail early with a useful FFmpeg/dependency error.
 $missingDeps = @($requiredDeps | Where-Object { !(Test-Path (Join-Path $deps $_)) })
 if ($missingDeps.Count -ne 0) {
   throw ('Required dependency files are missing: ' + ($missingDeps -join ', '))
@@ -74,6 +73,23 @@ if ($missingDeps.Count -ne 0) {
 if ($LASTEXITCODE -ne 0) { throw 'patch-deps.py failed.' }
 & $python (Join-Path $here 'apply-overrides.py') --src $deps
 if ($LASTEXITCODE -ne 0) { throw 'apply-overrides.py failed.' }
+
+# The bundled dependency tree already carries some XDK fixes. apply-overrides.py
+# also inserts declarations for freshly fetched trees, which can make a second
+# identical declaration when both paths meet. Normalize those exact duplicates
+# before compiling so repeated CI runs are deterministic.
+$peerConnection = Join-Path $deps 'opennow-switch\extern\libpeer\src\peer_connection.c'
+if (Test-Path $peerConnection) {
+  $pcText = [System.IO.File]::ReadAllText($peerConnection)
+  while ($pcText.Contains("  int dtls_ret = 0;`r`n  int dtls_ret = 0;")) {
+    $pcText = $pcText.Replace("  int dtls_ret = 0;`r`n  int dtls_ret = 0;", "  int dtls_ret = 0;")
+  }
+  while ($pcText.Contains("  int dtls_ret = 0;`n  int dtls_ret = 0;")) {
+    $pcText = $pcText.Replace("  int dtls_ret = 0;`n  int dtls_ret = 0;", "  int dtls_ret = 0;")
+  }
+  [System.IO.File]::WriteAllText($peerConnection, $pcText)
+}
+
 & $python (Join-Path $here 'generate-deps-projects.py') --src $deps
 if ($LASTEXITCODE -ne 0) { throw 'generate-deps-projects.py failed.' }
 
