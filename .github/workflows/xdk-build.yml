@@ -55,46 +55,123 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          $local = (Resolve-Path '.\xdk\bin\Release\default.xex').Path
-          $uri = 'ftp://192.168.2.204/Hdd1/Homebrew/default.xex'
+          $baseUri = 'ftp://192.168.2.204/Hdd1/Homebrew/'
+          $targetName = 'default.xex'
+          $tempName = 'default.xex.__uploading'
+          $targetUri = $baseUri + $targetName
+          $tempUri = $baseUri + $tempName
           $credential = New-Object System.Net.NetworkCredential('xbox', '1234')
-
-          $bytes = [System.IO.File]::ReadAllBytes($local)
-          $request = [System.Net.FtpWebRequest]::Create($uri)
-          $request.Method = [System.Net.WebRequestMethods+Ftp]::UploadFile
-          $request.Credentials = $credential
-          $request.UseBinary = $true
-          $request.UsePassive = $true
-          $request.KeepAlive = $false
-          $request.ContentLength = $bytes.Length
-          $stream = $request.GetRequestStream()
-          try { $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
-          $response = $request.GetResponse()
-          try { Write-Host ('FTP upload: ' + $response.StatusDescription.Trim()) } finally { $response.Dispose() }
-
-          $verifyPath = Join-Path $env:RUNNER_TEMP 'default.xex.remote'
-          $download = [System.Net.FtpWebRequest]::Create($uri)
-          $download.Method = [System.Net.WebRequestMethods+Ftp]::DownloadFile
-          $download.Credentials = $credential
-          $download.UseBinary = $true
-          $download.UsePassive = $true
-          $download.KeepAlive = $false
-          $downloadResponse = $download.GetResponse()
-          try {
-            $input = $downloadResponse.GetResponseStream()
-            try {
-              $output = [System.IO.File]::Create($verifyPath)
-              try { $input.CopyTo($output) } finally { $output.Dispose() }
-            } finally { $input.Dispose() }
-          } finally { $downloadResponse.Dispose() }
-
+          $local = (Resolve-Path '.\xdk\bin\Release\default.xex').Path
           $localHash = (Get-FileHash -Algorithm SHA256 $local).Hash
-          $remoteHash = (Get-FileHash -Algorithm SHA256 $verifyPath).Hash
-          Write-Host "Local SHA-256 : $localHash"
-          Write-Host "Remote SHA-256: $remoteHash"
-          if ($localHash -ne $remoteHash) {
-            throw 'Xbox deployment hash mismatch.'
+          $localSize = (Get-Item $local).Length
+
+          function New-FtpRequest([string]$Uri, [string]$Method) {
+            $r = [System.Net.FtpWebRequest]::Create($Uri)
+            $r.Method = $Method
+            $r.Credentials = $credential
+            $r.UseBinary = $true
+            $r.UsePassive = $true
+            $r.KeepAlive = $false
+            $r.Timeout = 15000
+            $r.ReadWriteTimeout = 15000
+            return $r
           }
+
+          function Invoke-FtpDeleteIfExists([string]$Uri) {
+            try {
+              $r = New-FtpRequest $Uri ([System.Net.WebRequestMethods+Ftp]::DeleteFile)
+              $resp = $r.GetResponse()
+              try { Write-Host ('FTP delete: ' + $resp.StatusDescription.Trim()) } finally { $resp.Dispose() }
+              return $true
+            } catch [System.Net.WebException] {
+              $resp = $_.Exception.Response
+              if ($resp -and [int]$resp.StatusCode -eq 550) {
+                Write-Host "FTP delete skipped (missing or unavailable): $Uri"
+                if ($resp) { $resp.Dispose() }
+                return $false
+              }
+              if ($resp) { $resp.Dispose() }
+              throw
+            }
+          }
+
+          function Invoke-FtpUpload([string]$Uri, [string]$Path) {
+            $bytes = [System.IO.File]::ReadAllBytes($Path)
+            $r = New-FtpRequest $Uri ([System.Net.WebRequestMethods+Ftp]::UploadFile)
+            $r.ContentLength = $bytes.Length
+            $stream = $r.GetRequestStream()
+            try { $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
+            $resp = $r.GetResponse()
+            try { Write-Host ('FTP upload: ' + $resp.StatusDescription.Trim()) } finally { $resp.Dispose() }
+          }
+
+          function Invoke-FtpDownload([string]$Uri, [string]$Path) {
+            if (Test-Path $Path) { Remove-Item -Force $Path }
+            $r = New-FtpRequest $Uri ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
+            $resp = $r.GetResponse()
+            try {
+              $input = $resp.GetResponseStream()
+              try {
+                $output = [System.IO.File]::Create($Path)
+                try { $input.CopyTo($output) } finally { $output.Dispose() }
+              } finally { $input.Dispose() }
+            } finally { $resp.Dispose() }
+          }
+
+          function Assert-FtpHash([string]$Uri, [string]$ExpectedHash, [string]$Label) {
+            $verifyPath = Join-Path $env:RUNNER_TEMP ($Label + '.verify')
+            Invoke-FtpDownload $Uri $verifyPath
+            $remoteHash = (Get-FileHash -Algorithm SHA256 $verifyPath).Hash
+            $remoteSize = (Get-Item $verifyPath).Length
+            Write-Host "$Label size: $remoteSize bytes"
+            Write-Host "$Label SHA-256: $remoteHash"
+            if ($remoteHash -ne $ExpectedHash) {
+              throw "$Label SHA-256 mismatch."
+            }
+          }
+
+          # Prove that login/path/passive data transfer work before modifying anything.
+          $list = New-FtpRequest $baseUri ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
+          $listResp = $list.GetResponse()
+          try {
+            $reader = New-Object System.IO.StreamReader($listResp.GetResponseStream())
+            try {
+              $entries = $reader.ReadToEnd()
+              Write-Host "FTP directory listing for Hdd1/Homebrew:"
+              Write-Host $entries
+            } finally { $reader.Dispose() }
+          } finally { $listResp.Dispose() }
+
+          Write-Host "Local XEX: $localSize bytes"
+          Write-Host "Local SHA-256: $localHash"
+
+          # Never stream directly over the live target. Upload and verify a sidecar first.
+          Invoke-FtpDeleteIfExists $tempUri | Out-Null
+          Invoke-FtpUpload $tempUri $local
+          Assert-FtpHash $tempUri $localHash 'staged-XEX'
+
+          $promoted = $false
+          try {
+            # Preferred path: remove old target and atomically rename the verified sidecar.
+            Invoke-FtpDeleteIfExists $targetUri | Out-Null
+            $rename = New-FtpRequest $tempUri ([System.Net.WebRequestMethods+Ftp]::Rename)
+            $rename.RenameTo = $targetName
+            $renameResp = $rename.GetResponse()
+            try { Write-Host ('FTP rename: ' + $renameResp.StatusDescription.Trim()) } finally { $renameResp.Dispose() }
+            $promoted = $true
+          } catch {
+            Write-Warning ('FTP rename promotion failed; trying direct replacement fallback. ' + $_.Exception.Message)
+          }
+
+          if (-not $promoted) {
+            # Some Xbox FTP servers do not implement RNFR/RNTO correctly. Since the staged
+            # file is already hash-verified, fall back to delete + fresh STOR of the target.
+            Invoke-FtpDeleteIfExists $targetUri | Out-Null
+            Invoke-FtpUpload $targetUri $local
+            Invoke-FtpDeleteIfExists $tempUri | Out-Null
+          }
+
+          Assert-FtpHash $targetUri $localHash 'deployed-XEX'
           Write-Host 'Xbox deployment verified successfully.'
 
       - name: Publish build status
@@ -114,7 +191,7 @@ jobs:
           }
 
           $body = @"
-          Latest XDK build status: **$status**
+          Latest XDK build/deploy status: **$status**
 
           Run ID: $runId
           Commit: ${{ github.sha }}
