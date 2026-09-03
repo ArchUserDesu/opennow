@@ -168,3 +168,20 @@ void log_message(LogLevel level, const char* component, const char* format, ...)
 }
 
 } // namespace opennow
+
+#if defined(OPENNOW_XDK)
+extern "C" void peer_log(char* level_tag, const char* file_name, int line_number, const char* format, ...) {
+    char message[768];
+    va_list args;
+    va_start(args, format);
+    _vsnprintf(message, sizeof(message) - 1, format, args);
+    va_end(args);
+    message[sizeof(message) - 1] = '\0';
+    opennow::LogLevel level = opennow::LogInfo;
+    if (level_tag && std::strcmp(level_tag, "ERROR") == 0) level = opennow::LogError;
+    else if (level_tag && std::strcmp(level_tag, "WARN") == 0) level = opennow::LogWarn;
+    else if (level_tag && std::strcmp(level_tag, "DEBUG") == 0) level = opennow::LogDebug;
+    const char* leaf = file_name ? std::strrchr(file_name, '\\') : NULL;
+    opennow::log_message(level, "libpeer", "%s:%d %s", leaf ? leaf + 1 : (file_name ? file_name : "?"), line_number, message);
+}
+#endif

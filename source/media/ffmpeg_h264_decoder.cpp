@@ -1,11 +1,14 @@
 #include "opennow/video_decoder.hpp"
+#include "opennow/logger.hpp"
 
 #ifdef OPENNOW_HAVE_FFMPEG
 extern "C" {
 #include <libavcodec/avcodec.h>
-#include <libavutil/frame.h>
-#include <libavutil/pixfmt.h>
 #include <libavcodec/version.h>
+#if LIBAVCODEC_VERSION_MAJOR >= 55
+#include <libavutil/frame.h>
+#endif
+#include <libavutil/pixfmt.h>
 #include <libavutil/mem.h>
 }
 
@@ -14,6 +17,20 @@ extern "C" {
 
 namespace opennow {
 namespace {
+
+/* FFmpeg 54 predates automatic codec registration.  Referencing the decoder
+   explicitly also ensures the static linker retains h264.o without dragging
+   every unrelated codec into the XEX through avcodec_register_all(). */
+extern "C" AVCodec ff_h264_decoder;
+
+void register_h264_decoder() {
+    static bool registered = false;
+    if (!registered) {
+        avcodec_register(&ff_h264_decoder);
+        registered = true;
+        ON_LOGI("video-decode", "FFmpeg H.264 decoder registered explicitly");
+    }
+}
 
 class FFmpegH264Decoder : public VideoDecoder {
 public:
@@ -32,21 +49,37 @@ public:
         // Allow a failed/restarted stream to reopen the decoder cleanly.
         free_frame();
         free_context();
+        register_h264_decoder();
         const AVCodec* codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+        ON_LOGI("video-decode", "FFmpeg H.264 open begin version=%u target=%dx%d fps=%d",(unsigned)LIBAVCODEC_VERSION_MAJOR,width,height,fps);
         if (!codec) {
+            ON_LOGE("video-decode", "avcodec_find_decoder H264 returned null");
             return false;
         }
 
         ctx_ = avcodec_alloc_context3(codec);
+        ON_LOGD("video-decode", "context allocation returned ptr=%p", ctx_);
         if (!ctx_) {
+            ON_LOGE("video-decode", "avcodec_alloc_context3 failed");
             return false;
         }
 
         // Cloud gaming wants the newest frame, not a deep playback buffer.
+#if LIBAVCODEC_VERSION_MAJOR < 56
+        ctx_->flags |= CODEC_FLAG_LOW_DELAY;
+        ctx_->flags2 |= CODEC_FLAG2_FAST;
+#else
         ctx_->flags |= AV_CODEC_FLAG_LOW_DELAY;
         ctx_->flags2 |= AV_CODEC_FLAG2_FAST;
-        ctx_->thread_count = 2;
-        ctx_->thread_type = FF_THREAD_SLICE;
+#endif
+        /* Xbox 360's legacy pthread compatibility layer cannot safely start
+           FFmpeg frame/slice workers from avcodec_open2. */
+        ctx_->thread_count = 1;
+        ctx_->thread_type = 0;
+        /* Deblocking is one of H.264's most expensive stages.  It is purely a
+           quality filter, so skip it on Xenon to protect network/audio service
+           time and favor a stable frame cadence. */
+        ctx_->skip_loop_filter = AVDISCARD_ALL;
         ctx_->width = width;
         ctx_->height = height;
 
@@ -55,16 +88,22 @@ public:
 #else
         frame_ = av_frame_alloc();
 #endif
+        ON_LOGD("video-decode", "frame allocation returned ptr=%p", frame_);
         if (!frame_) {
+            ON_LOGE("video-decode", "frame allocation failed");
             free_context();
             return false;
         }
 
-        if (avcodec_open2(ctx_, codec, NULL) < 0) {
+        ON_LOGI("video-decode", "avcodec_open2 begin codec=%s single_thread=1", codec->name?codec->name:"<unknown>");
+        int open_rc=avcodec_open2(ctx_, codec, NULL);
+        if (open_rc < 0) {
+            ON_LOGE("video-decode", "avcodec_open2 failed rc=%d",open_rc);
             free_frame();
             free_context();
             return false;
         }
+        ON_LOGI("video-decode", "FFmpeg H.264 open complete threads=%d type=%d skip_loop_filter=%d",ctx_->thread_count,ctx_->thread_type,(int)ctx_->skip_loop_filter);
         return true;
     }
 
@@ -81,7 +120,7 @@ public:
 #if LIBAVCODEC_VERSION_MAJOR < 57
         int got_frame = 0;
         const int rc = avcodec_decode_video2(ctx_, frame_, &got_frame, &packet);
-        if (rc < 0 || !got_frame) return false;
+        if (rc < 0 || !got_frame) { if(rc<0)ON_LOGE("video-decode","decode failed rc=%d packet_bytes=%u",rc,(unsigned)size); return false; }
 #else
         if (avcodec_send_packet(ctx_, &packet) < 0) return false;
         const int rc = avcodec_receive_frame(ctx_, frame_);
@@ -92,7 +131,10 @@ public:
         out.height = frame_->height;
         out.pts = frame_->pts;
 
-        if (frame_->format == AV_PIX_FMT_YUV420P) {
+        /* YUVJ420P is the legacy full-range spelling of the same planar
+           4:2:0 memory layout.  The XDK converter accepts both layouts. */
+        if (frame_->format == AV_PIX_FMT_YUV420P ||
+            frame_->format == AV_PIX_FMT_YUVJ420P) {
             out.format = PixelFormat_YUV420P;
             for (int plane = 0; plane < 3; ++plane) {
                 const int plane_height = plane == 0 ? out.height : (out.height + 1) / 2;
@@ -135,6 +177,7 @@ public:
             return true;
         }
 
+        ON_LOGE("video-decode", "unsupported pixel format=%d size=%dx%d",frame_->format,out.width,out.height);
         return false;
     }
 

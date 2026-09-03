@@ -65,20 +65,18 @@ TlsStream::TlsStream() : socket_(INVALID_SOCKET), socket_open_(false), tls_ready
 TlsStream::~TlsStream() { close(); }
 
 void TlsStream::set_mbed_error(const char* where, int rc) {
-    char detail[160];
-    detail[0] = 0;
-    mbedtls_strerror(rc, detail, sizeof(detail));
     char full[256];
     #ifdef OPENNOW_XDK
-    _snprintf(full, sizeof(full) - 1, "%s: -0x%04x %s", where, (unsigned)(-rc), detail);
+    _snprintf(full, sizeof(full) - 1, "%s: -0x%04x", where, (unsigned)(-rc));
     full[sizeof(full)-1] = '\0';
 #else
-    std::snprintf(full, sizeof(full), "%s: -0x%04x %s", where, (unsigned)(-rc), detail);
+    std::snprintf(full, sizeof(full), "%s: -0x%04x", where, (unsigned)(-rc));
 #endif
     error_ = full;
 }
 
 bool TlsStream::load_ca(const char* path) {
+    ON_LOGD("tls", "CA load begin path=%s", path ? path : "<null>");
     if (!path || !*path) { error_ = "CA bundle path is empty"; return false; }
     std::ifstream f(path, std::ios::binary);
     if (!f) { error_ = std::string("unable to open CA bundle: ") + path; return false; }
@@ -90,7 +88,8 @@ bool TlsStream::load_ca(const char* path) {
     f.read(reinterpret_cast<char*>(&data[0]), n);
     if (!f) { error_ = "failed reading CA bundle"; return false; }
     int rc = mbedtls_x509_crt_parse(&ca_, &data[0], data.size());
-    if (rc < 0) { set_mbed_error("mbedtls_x509_crt_parse", rc); return false; }
+    if (rc < 0) { set_mbed_error("mbedtls_x509_crt_parse", rc); ON_LOGE("tls", "CA parse failed bytes=%u rc=%d error=%s", (unsigned)data.size(), rc, error_.c_str()); return false; }
+    ON_LOGI("tls", "CA load complete path=%s bytes=%u skipped_certificates=%d", path, (unsigned)n, rc);
     return true;
 }
 
@@ -118,31 +117,65 @@ int TlsStream::bio_recv(void* ctx, unsigned char* buf, size_t len) {
 bool TlsStream::connect(const std::string& host, int port, const char* ca_path) {
     close();
     error_.clear();
+    const DWORD connect_started = GetTickCount();
+    ON_LOGI("tls", "connect begin host=%s port=%d ca=%s", host.c_str(), port, ca_path ? ca_path : "<null>");
+    ON_LOGI("socket", "preflight mode=XNet bypass-security plus DashLaunch sockpatch");
 
-    char port_text[16];
-    _snprintf(port_text, sizeof(port_text) - 1, "%d", port); port_text[sizeof(port_text)-1] = '\0';
-    struct addrinfo hints;
-    ZeroMemory(&hints, sizeof(hints));
-    hints.ai_family = AF_INET; // Xbox 360 title stack is most reliable over IPv4.
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
-    struct addrinfo* result = NULL;
-    int gai = getaddrinfo(host.c_str(), port_text, &hints, &result);
-    if (gai != 0 || !result) {
-        char msg[128]; _snprintf(msg, sizeof(msg) - 1, "getaddrinfo failed: %d", gai); msg[sizeof(msg)-1] = '\0'; error_ = msg; return false;
+    IN_ADDR address;
+    address.s_addr = inet_addr(host.c_str());
+    if (address.s_addr == INADDR_NONE) {
+        XNDNS* dns = NULL;
+        int dns_rc = XNetDnsLookup(host.c_str(), NULL, &dns);
+        if (dns_rc != 0 || !dns) { error_ = "DNS lookup failed"; ON_LOGE("dns", "lookup submit failed host=%s rc=%d ptr=%p wsa=%d", host.c_str(), dns_rc, dns, WSAGetLastError()); return false; }
+        DWORD dns_started = GetTickCount();
+        while (dns->iStatus == WSAEINPROGRESS && GetTickCount() - dns_started < 15000) Sleep(1);
+        ON_LOGI("dns", "lookup complete host=%s status=%d addresses=%u elapsed_ms=%u", host.c_str(), dns->iStatus, dns->cina, (unsigned)(GetTickCount()-dns_started));
+        if (dns->iStatus == 0 && dns->cina > 0) address = dns->aina[0];
+        else address.s_addr = INADDR_NONE;
+        XNetDnsRelease(dns);
+        if (address.s_addr == INADDR_NONE) { error_ = "DNS lookup failed"; ON_LOGE("dns", "lookup yielded no usable IPv4 address host=%s", host.c_str()); return false; }
     }
-    for (struct addrinfo* ai = result; ai; ai = ai->ai_next) {
-        socket_ = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-        if (socket_ == INVALID_SOCKET) continue;
-        BOOL bypass = TRUE;
-        // Retail homebrew titles generally need these XNet socket options for ordinary Internet traffic.
-        setsockopt(socket_, SOL_SOCKET, 0x5801, reinterpret_cast<const char*>(&bypass), sizeof(bypass));
-        setsockopt(socket_, SOL_SOCKET, 0x5802, reinterpret_cast<const char*>(&bypass), sizeof(bypass));
-        if (::connect(socket_, ai->ai_addr, (int)ai->ai_addrlen) == 0) { socket_open_ = true; break; }
-        closesocket(socket_); socket_ = INVALID_SOCKET;
+    const unsigned char* ip = (const unsigned char*)&address.s_addr;
+    ON_LOGI("socket", "resolved endpoint host=%s ipv4=%u.%u.%u.%u port=%d raw=0x%08x", host.c_str(), ip[0], ip[1], ip[2], ip[3], port, (unsigned)address.s_addr);
+    sockaddr_in endpoint;
+    ZeroMemory(&endpoint, sizeof(endpoint));
+    endpoint.sin_family = AF_INET;
+    endpoint.sin_port = htons((u_short)port);
+    endpoint.sin_addr = address;
+    int last_socket_error = 0;
+    /* Retail-kernel homebrew environments disagree about which undocumented
+       mark-insecure option is exposed.  Probe each known form on a fresh
+       socket and keep the first one that actually connects.  In particular,
+       do not discard a socket merely because an optional flag was rejected:
+       DashLaunch sockpatch can grant the privilege globally. */
+    const int strategies[] = { 1, 2, 3, 0 }; /* 5801, 5802, both, global patch */
+    const char* strategy_names[] = { "5801-only", "5802-only", "5802+5801", "global-only" };
+    for (int attempt = 0; attempt < 4 && !socket_open_; ++attempt) {
+        socket_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        int create_error = socket_ == INVALID_SOCKET ? WSAGetLastError() : 0;
+        ON_LOGD("socket", "probe attempt=%d strategy=%s create=0x%08x wsa=%d",
+                attempt + 1, strategy_names[attempt], (unsigned)socket_, create_error);
+        if (socket_ == INVALID_SOCKET) { last_socket_error = create_error; continue; }
+        BOOL enabled = TRUE;
+        int opt5801 = 0, err5801 = 0, opt5802 = 0, err5802 = 0;
+        if (strategies[attempt] & 2) {
+            opt5802 = setsockopt(socket_, SOL_SOCKET, 0x5802, reinterpret_cast<const char*>(&enabled), sizeof(enabled));
+            if (opt5802 != 0) err5802 = WSAGetLastError();
+        }
+        if (strategies[attempt] & 1) {
+            opt5801 = setsockopt(socket_, SOL_SOCKET, 0x5801, reinterpret_cast<const char*>(&enabled), sizeof(enabled));
+            if (opt5801 != 0) err5801 = WSAGetLastError();
+        }
+        int connect_rc = ::connect(socket_, reinterpret_cast<sockaddr*>(&endpoint), sizeof(endpoint));
+        int connect_error = connect_rc == 0 ? 0 : WSAGetLastError();
+        last_socket_error = connect_error;
+        ON_LOGI("socket", "probe result strategy=%s opt5802=%d/%d opt5801=%d/%d connect=%d/%d elapsed_ms=%u",
+                strategy_names[attempt], opt5802, err5802, opt5801, err5801,
+                connect_rc, connect_error, (unsigned)(GetTickCount()-connect_started));
+        if (connect_rc == 0) socket_open_ = true;
+        else { closesocket(socket_); socket_ = INVALID_SOCKET; }
     }
-    freeaddrinfo(result);
-    if (!socket_open_) { error_ = "TCP connect failed"; return false; }
+    if (!socket_open_) { if(socket_==INVALID_SOCKET && !last_socket_error)last_socket_error=WSAGetLastError(); char b[96]; _snprintf(b,sizeof(b)-1,"TCP connect failed wsa=%d",last_socket_error); b[sizeof(b)-1]=0; error_=b; ON_LOGE("socket", "%s host=%s port=%d", error_.c_str(), host.c_str(), port); return false; }
 
     if (!load_ca(ca_path)) { close(); return false; }
     const char* pers = "opennow-xex";
@@ -160,15 +193,18 @@ bool TlsStream::connect(const std::string& host, int port, const char* ca_path) 
     rc = mbedtls_ssl_set_hostname(&ssl_, host.c_str());
     if (rc != 0) { set_mbed_error("ssl_set_hostname", rc); close(); return false; }
     mbedtls_ssl_set_bio(&ssl_, this, bio_send, bio_recv, NULL);
+    ON_LOGI("tls", "handshake begin host=%s", host.c_str());
+    unsigned handshake_spins=0;
     for (;;) {
         rc = mbedtls_ssl_handshake(&ssl_);
         if (rc == 0) break;
-        if (rc == MBEDTLS_ERR_SSL_WANT_READ || rc == MBEDTLS_ERR_SSL_WANT_WRITE) continue;
-        set_mbed_error("ssl_handshake", rc); close(); return false;
+        if (rc == MBEDTLS_ERR_SSL_WANT_READ || rc == MBEDTLS_ERR_SSL_WANT_WRITE) { ++handshake_spins; continue; }
+        set_mbed_error("ssl_handshake", rc); ON_LOGE("tls", "handshake failed host=%s rc=%d error=%s spins=%u elapsed_ms=%u", host.c_str(), rc, error_.c_str(),handshake_spins,(unsigned)(GetTickCount()-connect_started)); close(); return false;
     }
     uint32_t verify = mbedtls_ssl_get_verify_result(&ssl_);
-    if (verify != 0) { error_ = "TLS certificate verification failed"; close(); return false; }
+    if (verify != 0) { error_ = "TLS certificate verification failed"; ON_LOGE("tls", "certificate verify failed host=%s flags=0x%08x",host.c_str(),(unsigned)verify); close(); return false; }
     tls_ready_ = true;
+    ON_LOGI("tls", "connect complete host=%s port=%d spins=%u elapsed_ms=%u",host.c_str(),port,handshake_spins,(unsigned)(GetTickCount()-connect_started));
     return true;
 }
 

@@ -4,7 +4,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#ifdef __BYTE_ORDER
+#if defined(_XBOX)
+#define __BIG_ENDIAN 4321
+#define __LITTLE_ENDIAN 1234
+#define __BYTE_ORDER __BIG_ENDIAN
+#elif defined(__BYTE_ORDER)
 #define __BIG_ENDIAN 4321
 #define __LITTLE_ENDIAN 1234
 #elif defined(__SWITCH__) || defined(_WIN32)

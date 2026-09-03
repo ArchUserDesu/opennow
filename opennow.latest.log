@@ -1,0 +1,33 @@
+OpenNOW-Xenon persistent diagnostic log
+Log format: sequence elapsed-ms level component message
+Secrets, authorization headers, and request bodies are intentionally omitted.
+000001 +0000000045ms INFO  logger: persistent logging opened at game:\opennow.log
+000002 +0000000047ms INFO  boot: OpenNOW Xbox-kernel/XEX platform starting
+000003 +0000000050ms INFO  xdk-video: initialization begin sdk=0
+000004 +0000000052ms INFO  xdk-video: video mode reported=1920x1080 widescreen=1 progressive=1 selected=1280x720
+000005 +0000000110ms INFO  xdk-video: CreateDevice complete device=40002A00
+000006 +0000000112ms INFO  xdk-audio: initialization begin rate=48000 channels=2
+000007 +0000000114ms INFO  xdk-audio: initialization complete engine=400097A0 voice=4001B1F0
+000008 +0000000116ms INFO  xdk-net: public Internet access requires DashLaunch sockpatch; probing per-socket during connect
+000009 +0000000169ms INFO  xdk-net: title network ready status=0x00000068 ip=0xc0a802cc
+000010 +0000000170ms INFO  boot: XEX platform ready display=1280x720
+000011 +0000000172ms INFO  main: entered application main; persistent_log=game:\opennow.log
+000012 +0000000234ms INFO  ui: first frame presented display=1280x720 chars=0
+000013 +0000000242ms INFO  ui: first non-empty text frame presented chars=116
+000014 +0000000244ms INFO  http: XEX HTTPS transport initialized (mbedTLS/Winsock)
+000015 +0000000246ms INFO  main: checking saved authentication session at game:\opennow_session.json
+000016 +0000000248ms INFO  storage: session file not found path=game:\opennow_session.json
+000017 +0000000251ms INFO  auth: no usable saved session found
+000018 +0000000253ms INFO  auth: fetching login providers
+000019 +0000000255ms INFO  http: request begin method=GET url=https://pcs.geforcenow.com/v1/serviceUrls request_bytes=0 headers=1
+000020 +0000000257ms INFO  tls: CA bundle selected path=game:\cacert.pem
+000021 +0000000259ms INFO  tls: connect begin host=pcs.geforcenow.com port=443 ca=game:\cacert.pem
+000022 +0000000261ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000023 +0000000328ms INFO  dns: lookup complete host=pcs.geforcenow.com status=0 addresses=3 elapsed_ms=65
+000024 +0000000330ms INFO  socket: resolved endpoint host=pcs.geforcenow.com ipv4=52.202.118.150 port=443 raw=0x34ca7696
+000025 +0000000332ms DEBUG socket: socket create handle=0x1b5f1000 wsa=0
+000026 +0000000334ms INFO  socket: XNet unencrypted options handle=0x1b5f1000 opt5802_rc=0 wsa=0 opt5801_rc=-1 wsa=10013
+000027 +0000000336ms ERROR socket: TCP connect failed wsa=10013 host=pcs.geforcenow.com port=443
+000028 +0000000339ms ERROR http: request failed method=GET url=https://pcs.geforcenow.com/v1/serviceUrls error=TCP connect failed wsa=10013 elapsed_ms=84
+000029 +0000000341ms FATAL main: unhandled exception: serviceUrls HTTP 0
+000030 +0000000374ms INFO  main: waiting for controller A before returning

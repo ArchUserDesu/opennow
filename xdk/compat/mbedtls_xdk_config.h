@@ -93,8 +93,9 @@
 #ifdef MBEDTLS_RIPEMD160_C
 #undef MBEDTLS_RIPEMD160_C
 #endif
-#ifdef MBEDTLS_SHA1_C
-#undef MBEDTLS_SHA1_C
+/* SHA-1 is required by the RFC 6455 WebSocket accept handshake. */
+#ifndef MBEDTLS_SHA1_C
+#define MBEDTLS_SHA1_C
 #endif
 #ifdef MBEDTLS_SHA384_C
 #undef MBEDTLS_SHA384_C
@@ -113,6 +114,11 @@
 #endif
 #ifdef MBEDTLS_PKCS12_C
 #undef MBEDTLS_PKCS12_C
+#endif
+
+/* Required by diagnostics and libpeer's DTLS retransmission timer. */
+#ifndef MBEDTLS_ERROR_C
+#define MBEDTLS_ERROR_C
 #endif
 
 /* libpeer needs DTLS-SRTP. */

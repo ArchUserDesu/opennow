@@ -3,6 +3,7 @@
 #include "video_frame.hpp"
 #include <cstddef>
 #include <cstdint>
+#include <string>
 namespace opennow {
 class XenonPlatform {
 public:
@@ -15,5 +16,6 @@ public:
     // Minimal text UI used by the XEX target. LibXenon maps these to stdout.
     void clear_text();
     void write_text(const char*);
+    void set_stream_overlay(const char*);
 };
 }

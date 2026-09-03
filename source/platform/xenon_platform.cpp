@@ -92,8 +92,9 @@ bool XenonPlatform::play_pcm48_stereo(const std::int16_t* pcm,std::size_t frames
 void XenonPlatform::log(const char* s){ON_LOGI("platform","%s",s?s:"");}
 void XenonPlatform::clear_text(){std::printf("\033[2J\033[H");}
 void XenonPlatform::write_text(const char* s){if(s)std::printf("%s",s);}
+void XenonPlatform::set_stream_overlay(const char* s){if(s)std::printf("%s",s);}
 }
 #elif !defined(OPENNOW_XDK)
 #include <cstdio>
-namespace opennow {bool XenonPlatform::init(){return true;}void XenonPlatform::poll(){}bool XenonPlatform::read_gamepad(GamepadState&){return false;}bool XenonPlatform::present(const VideoFrame&){return true;}bool XenonPlatform::play_pcm48_stereo(const std::int16_t*,std::size_t){return true;}void XenonPlatform::log(const char* s){std::puts(s?s:"");}void XenonPlatform::clear_text(){}void XenonPlatform::write_text(const char* s){if(s)std::puts(s);}}
+namespace opennow {bool XenonPlatform::init(){return true;}void XenonPlatform::poll(){}bool XenonPlatform::read_gamepad(GamepadState&){return false;}bool XenonPlatform::present(const VideoFrame&){return true;}bool XenonPlatform::play_pcm48_stereo(const std::int16_t*,std::size_t){return true;}void XenonPlatform::log(const char* s){std::puts(s?s:"");}void XenonPlatform::clear_text(){}void XenonPlatform::write_text(const char* s){if(s)std::puts(s);}void XenonPlatform::set_stream_overlay(const char*){}}
 #endif

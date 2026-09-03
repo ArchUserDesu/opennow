@@ -4,7 +4,11 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#ifdef __BYTE_ORDER
+#if defined(_XBOX)
+#define __BIG_ENDIAN 4321
+#define __LITTLE_ENDIAN 1234
+#define __BYTE_ORDER __BIG_ENDIAN
+#elif defined(__BYTE_ORDER)
 #define __BIG_ENDIAN 4321
 #define __LITTLE_ENDIAN 1234
 #elif defined(__SWITCH__)
@@ -58,8 +62,6 @@ typedef struct RtpHeader {
   uint16_t seq_number;
   uint32_t timestamp;
   uint32_t ssrc;
-  uint32_t csrc[0];
-
 } RtpHeader;
 
 typedef struct RtpPacket {

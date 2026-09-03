@@ -6,6 +6,10 @@
 typedef struct UdpSocket {
   int fd;
   Address bind_addr;
+#ifdef _XBOX
+  Address connected_addr;
+  int connected;
+#endif
 } UdpSocket;
 
 typedef struct TcpSocket {

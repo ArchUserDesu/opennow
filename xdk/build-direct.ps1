@@ -103,11 +103,33 @@ function Build-StaticProject([string]$ProjectPath, [string]$OutputName) {
   foreach ($def in $defines) { $common += ('/D' + $def.Replace('"','\"')) }
   foreach ($fi in $forced) { $common += "/FI$fi" }
 
+  # This direct builder has no compiler-generated dependency database.  Use
+  # the newest project/include header as a conservative project dependency so
+  # a struct or inline change can never leave ABI-incompatible stale objects
+  # in the same archive.
+  $dependencyTime = (Get-Item $ProjectPath).LastWriteTimeUtc
+  $headerRoots = @($includes + ($sources | ForEach-Object { Split-Path $_ -Parent })) | Select-Object -Unique
+  foreach ($headerRoot in $headerRoots) {
+    if (!(Test-Path -LiteralPath $headerRoot -PathType Container)) { continue }
+    foreach ($headerFile in (Get-ChildItem -LiteralPath $headerRoot -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in '.h','.hpp','.hh','.inl' })) {
+      if ($headerFile.LastWriteTimeUtc -gt $dependencyTime) { $dependencyTime = $headerFile.LastWriteTimeUtc }
+    }
+  }
+
   Push-Location $projectDir
   try {
     for ($i = 0; $i -lt $sources.Count; $i++) {
       $obj = Join-Path $objDir (('{0:D4}_' -f $i) + [IO.Path]::GetFileNameWithoutExtension($sources[$i]) + '.obj')
       $inputTime = (Get-Item $sources[$i]).LastWriteTimeUtc
+      $projectTime = (Get-Item $ProjectPath).LastWriteTimeUtc
+      if ($projectTime -gt $inputTime) { $inputTime = $projectTime }
+      if ($dependencyTime -gt $inputTime) { $inputTime = $dependencyTime }
+      foreach ($forcedHeader in $forced) {
+        if (Test-Path $forcedHeader) {
+          $forcedTime = (Get-Item $forcedHeader).LastWriteTimeUtc
+          if ($forcedTime -gt $inputTime) { $inputTime = $forcedTime }
+        }
+      }
       if ($OutputName -eq 'mbedtls_opennow') {
         $configTime = (Get-Item (Join-Path $here 'compat\mbedtls_xdk_config.h')).LastWriteTimeUtc
         if ($configTime -gt $inputTime) { $inputTime = $configTime }
@@ -135,6 +157,7 @@ Build-StaticProject (Join-Path $projects 'srtp2.vcxproj') 'srtp2'
 Build-StaticProject (Join-Path $projects 'peer.vcxproj') 'peer'
 
 $ff = Join-Path $here 'deps-src\xbmc360\libraries\ffmpeg\vcproj'
+Build-StaticProject (Join-Path $ff 'pthreads\pthreads.vcxproj') 'pthreads'
 Build-StaticProject (Join-Path $ff 'libavutil\libavutil.vcxproj') 'libavutil'
 Build-StaticProject (Join-Path $ff 'libavcodec\libavcodec.vcxproj') 'libavcodec'
 
@@ -151,10 +174,25 @@ New-Item -ItemType Directory -Force $objDir, $outDir | Out-Null
 $objects = @()
 $sources = $mainProject.SelectNodes('//m:ClCompile[@Include]', $ns)
 Write-Host "==> OpenNOW-XEX ($($sources.Count) sources)"
+$mainDependencyTime = (Get-Item (Join-Path $here 'OpenNOW-XEX.vcxproj')).LastWriteTimeUtc
+$mainSourceDirs = @()
+foreach ($sourceNode in @($sources)) {
+  $mainSourcePath = [IO.Path]::GetFullPath((Join-Path $here ([string]$sourceNode.Include)))
+  $mainSourceDirs += Split-Path -Path $mainSourcePath -Parent
+}
+$mainHeaderRoots = @($includes + $mainSourceDirs) | Select-Object -Unique
+foreach ($headerRoot in $mainHeaderRoots) {
+  if (!(Test-Path -LiteralPath $headerRoot -PathType Container)) { continue }
+  foreach ($headerFile in (Get-ChildItem -LiteralPath $headerRoot -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in '.h','.hpp','.hh','.inl' })) {
+    if ($headerFile.LastWriteTimeUtc -gt $mainDependencyTime) { $mainDependencyTime = $headerFile.LastWriteTimeUtc }
+  }
+}
 for ($i = 0; $i -lt $sources.Count; $i++) {
   $source = [IO.Path]::GetFullPath((Join-Path $here ([string]$sources[$i].Include)))
   $obj = Join-Path $objDir (('{0:D3}_' -f $i) + [IO.Path]::GetFileNameWithoutExtension($source) + '.obj')
-  if ((Test-Path $obj) -and (Get-Item $obj).LastWriteTimeUtc -ge (Get-Item $source).LastWriteTimeUtc) {
+  $mainInputTime = (Get-Item $source).LastWriteTimeUtc
+  if ($mainDependencyTime -gt $mainInputTime) { $mainInputTime = $mainDependencyTime }
+  if ((Test-Path $obj) -and (Get-Item $obj).LastWriteTimeUtc -ge $mainInputTime) {
     $objects += $obj
     continue
   }
@@ -168,9 +206,9 @@ for ($i = 0; $i -lt $sources.Count; $i++) {
 
 $pe = Join-Path $outDir 'default.pe'
 $xdb = Join-Path $outDir 'default.xdb'
-$libs = @('peer.lib','srtp2.lib','mbedtls_opennow.lib','cjson.lib','jansson.lib','opus.lib','libavcodec.lib','libavutil.lib','xnet.lib','xapilib.lib','d3d9.lib','xaudio2.lib','xboxkrnl.lib')
+$libs = @('peer.lib','srtp2.lib','mbedtls_opennow.lib','cjson.lib','jansson.lib','opus.lib','libavcodec.lib','libavutil.lib','pthreads.lib','xnet.lib','xauth.lib','xapilib.lib','d3d9.lib','d3dx9.lib','xgraphics.lib','xaudio2.lib','xmcore.lib','xbdm.lib','xboxkrnl.lib')
 $linkRsp = Join-Path $objDir 'link.rsp'
-$linkLines = @('/nologo', "/OUT:$pe", "/PDB:$xdb")
+$linkLines = @('/nologo', '/XEX:NO', "/OUT:$pe", "/PDB:$xdb")
 $linkLines += $objects | ForEach-Object { '"' + $_ + '"' }
 $linkLines += "/LIBPATH:$(Join-Path $here "lib\$Configuration")"
 $linkLines += $libs
@@ -178,7 +216,9 @@ $linkLines | Set-Content -Encoding ASCII $linkRsp
 Invoke-Checked (Join-Path $XdkRoot 'bin\win32\link.exe') @("@$linkRsp")
 
 $xex = Join-Path $outDir 'default.xex'
-Invoke-Checked $imagexex @("/IN:$pe", "/OUT:$xex")
+$xexConfig = Join-Path $here 'xex.xml'
+if (!(Test-Path $xexConfig)) { throw 'xdk\xex.xml is missing' }
+Invoke-Checked $imagexex @("/IN:$pe", "/OUT:$xex", "/CONFIG:$xexConfig")
 $ca = Join-Path $here 'cacert.pem'
 if (!(Test-Path $ca)) { throw 'xdk\cacert.pem is missing' }
 Copy-Item -Force $ca (Join-Path $outDir 'cacert.pem')

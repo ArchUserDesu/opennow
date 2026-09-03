@@ -1,0 +1,312 @@
+OpenNOW-Xenon persistent diagnostic log
+Log format: sequence elapsed-ms level component message
+Secrets, authorization headers, and request bodies are intentionally omitted.
+000001 +0000000044ms INFO  logger: persistent logging opened at game:\opennow.log
+000002 +0000000046ms INFO  boot: OpenNOW Xbox-kernel/XEX platform starting
+000003 +0000000047ms INFO  xdk-video: initialization begin sdk=0
+000004 +0000000051ms INFO  xdk-video: video mode reported=1920x1080 widescreen=1 progressive=1 selected=1280x720
+000005 +0000000110ms INFO  xdk-video: CreateDevice complete device=40002A00
+000006 +0000000114ms INFO  xdk-video: stream video shaders initialized
+000007 +0000000117ms INFO  xdk-audio: initialization begin rate=48000 channels=2
+000008 +0000000119ms INFO  xdk-audio: initialization complete engine=40009D10 voice=4001B760
+000009 +0000000122ms INFO  xdk-net: third-party connectivity XAuthStartup=0x80158406 insecure_sockets_allowed=1 xnet_flags=0x09
+000010 +0000000124ms ERROR xdk-net: XAuth bypass initialization failed hr=0x80158406; continuing with XEX privilege and DashLaunch sockpatch
+000011 +0000000126ms INFO  xdk-net: public Internet access uses XAuth/XNet bypass, XEX privilege, and per-socket insecure marking
+000012 +0000000180ms INFO  xdk-net: title network ready status=0x00000068 ip=0xc0a802cc
+000013 +0000000181ms INFO  boot: XEX platform ready display=1280x720
+000014 +0000000183ms INFO  main: entered application main; persistent_log=game:\opennow.log
+000015 +0000000241ms INFO  ui: first frame presented display=1280x720 chars=0
+000016 +0000000245ms INFO  ui: first non-empty text frame presented chars=116
+000017 +0000000247ms INFO  http: XEX HTTPS transport initialized (mbedTLS/Winsock)
+000018 +0000000248ms INFO  main: checking saved authentication session at game:\opennow_session.json
+000019 +0000000259ms INFO  storage: session file parsed path=game:\opennow_session.json bytes=1757 usable=1
+000020 +0000000261ms INFO  auth: saved session loaded provider=NVIDIA user_name_length=14
+000021 +0000000266ms INFO  auth: refreshing saved session if required
+000022 +0000000269ms ERROR auth: saved session refresh failed: session expired and has no refresh token
+000023 +0000000277ms INFO  auth: fetching login providers
+000024 +0000000279ms INFO  http: request begin method=GET url=https://pcs.geforcenow.com/v1/serviceUrls request_bytes=0 headers=1
+000025 +0000000281ms INFO  tls: CA bundle selected path=game:\cacert.pem
+000026 +0000000282ms INFO  tls: connect begin host=pcs.geforcenow.com port=443 ca=game:\cacert.pem
+000027 +0000000284ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000028 +0000000309ms INFO  dns: lookup complete host=pcs.geforcenow.com status=0 addresses=3 elapsed_ms=23
+000029 +0000000311ms INFO  socket: resolved endpoint host=pcs.geforcenow.com ipv4=184.193.65.51 port=443 raw=0xb8c14133
+000030 +0000000313ms DEBUG socket: probe attempt=1 strategy=5801-only create=0x1f32c000 wsa=0
+000031 +0000000333ms INFO  socket: probe result strategy=5801-only opt5802=0/0 opt5801=0/0 connect=0/0 elapsed_ms=51
+000032 +0000000336ms DEBUG tls: CA load begin path=game:\cacert.pem
+000033 +0000000392ms INFO  tls: CA load complete path=game:\cacert.pem bytes=188900 skipped_certificates=59
+000034 +0000000396ms INFO  tls: handshake begin host=pcs.geforcenow.com
+000035 +0000000472ms INFO  tls: connect complete host=pcs.geforcenow.com port=443 spins=0 elapsed_ms=190
+000036 +0000000497ms INFO  http: request end method=GET url=https://pcs.geforcenow.com/v1/serviceUrls status=200 response_bytes=5653 elapsed_ms=218
+000037 +0000002372ms INFO  auth: selected login provider code=NVIDIA
+000038 +0000002431ms INFO  http: request begin method=POST url=https://login.nvidia.com/device/authorize request_bytes=229 headers=15
+000039 +0000002433ms INFO  tls: connect begin host=login.nvidia.com port=443 ca=game:\cacert.pem
+000040 +0000002435ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000041 +0000002455ms INFO  dns: lookup complete host=login.nvidia.com status=0 addresses=3 elapsed_ms=18
+000042 +0000002457ms INFO  socket: resolved endpoint host=login.nvidia.com ipv4=52.6.228.73 port=443 raw=0x3406e449
+000043 +0000002459ms DEBUG socket: probe attempt=1 strategy=5801-only create=0x1f32d000 wsa=0
+000044 +0000002486ms INFO  socket: probe result strategy=5801-only opt5802=0/0 opt5801=0/0 connect=0/0 elapsed_ms=53
+000045 +0000002488ms DEBUG tls: CA load begin path=game:\cacert.pem
+000046 +0000002553ms INFO  tls: CA load complete path=game:\cacert.pem bytes=188900 skipped_certificates=59
+000047 +0000002557ms INFO  tls: handshake begin host=login.nvidia.com
+000048 +0000002638ms INFO  tls: connect complete host=login.nvidia.com port=443 spins=0 elapsed_ms=205
+000049 +0000002698ms INFO  http: request end method=POST url=https://login.nvidia.com/device/authorize status=200 response_bytes=323 elapsed_ms=267
+000050 +0000002700ms INFO  auth: QR challenge received interval=5 expires_at_ms=1788435473420
+000051 +0000007737ms INFO  http: request begin method=POST url=https://login.nvidia.com/token request_bytes=218 headers=5
+000052 +0000007787ms INFO  tls: connect begin host=login.nvidia.com port=443 ca=game:\cacert.pem
+000053 +0000007788ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000054 +0000007798ms INFO  dns: lookup complete host=login.nvidia.com status=0 addresses=3 elapsed_ms=8
+000055 +0000007800ms INFO  socket: resolved endpoint host=login.nvidia.com ipv4=44.208.249.235 port=443 raw=0x2cd0f9eb
+000056 +0000007802ms DEBUG socket: probe attempt=1 strategy=5801-only create=0x1f32e000 wsa=0
+000057 +0000007825ms INFO  socket: probe result strategy=5801-only opt5802=0/0 opt5801=0/0 connect=0/0 elapsed_ms=38
+000058 +0000007827ms DEBUG tls: CA load begin path=game:\cacert.pem
+000059 +0000007896ms INFO  tls: CA load complete path=game:\cacert.pem bytes=188900 skipped_certificates=59
+000060 +0000007900ms INFO  tls: handshake begin host=login.nvidia.com
+000061 +0000008009ms INFO  tls: connect complete host=login.nvidia.com port=443 spins=0 elapsed_ms=222
+000062 +0000008048ms INFO  http: request end method=POST url=https://login.nvidia.com/token status=400 response_bytes=97 elapsed_ms=311
+000063 +0000013080ms INFO  http: request begin method=POST url=https://login.nvidia.com/token request_bytes=218 headers=5
+000064 +0000013133ms INFO  tls: connect begin host=login.nvidia.com port=443 ca=game:\cacert.pem
+000065 +0000013135ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000066 +0000013143ms INFO  dns: lookup complete host=login.nvidia.com status=0 addresses=3 elapsed_ms=6
+000067 +0000013145ms INFO  socket: resolved endpoint host=login.nvidia.com ipv4=52.6.228.73 port=443 raw=0x3406e449
+000068 +0000013147ms DEBUG socket: probe attempt=1 strategy=5801-only create=0x1f32f000 wsa=0
+000069 +0000013173ms INFO  socket: probe result strategy=5801-only opt5802=0/0 opt5801=0/0 connect=0/0 elapsed_ms=40
+000070 +0000013174ms DEBUG tls: CA load begin path=game:\cacert.pem
+000071 +0000013243ms INFO  tls: CA load complete path=game:\cacert.pem bytes=188900 skipped_certificates=59
+000072 +0000013247ms INFO  tls: handshake begin host=login.nvidia.com
+000073 +0000013346ms INFO  tls: connect complete host=login.nvidia.com port=443 spins=0 elapsed_ms=213
+000074 +0000013391ms INFO  http: request end method=POST url=https://login.nvidia.com/token status=400 response_bytes=97 elapsed_ms=311
+000075 +0000018424ms INFO  http: request begin method=POST url=https://login.nvidia.com/token request_bytes=218 headers=5
+000076 +0000018482ms INFO  tls: connect begin host=login.nvidia.com port=443 ca=game:\cacert.pem
+000077 +0000018484ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000078 +0000018493ms INFO  dns: lookup complete host=login.nvidia.com status=0 addresses=3 elapsed_ms=7
+000079 +0000018495ms INFO  socket: resolved endpoint host=login.nvidia.com ipv4=54.227.136.94 port=443 raw=0x36e3885e
+000080 +0000018497ms DEBUG socket: probe attempt=1 strategy=5801-only create=0x1f330000 wsa=0
+000081 +0000018521ms INFO  socket: probe result strategy=5801-only opt5802=0/0 opt5801=0/0 connect=0/0 elapsed_ms=39
+000082 +0000018523ms DEBUG tls: CA load begin path=game:\cacert.pem
+000083 +0000018603ms INFO  tls: CA load complete path=game:\cacert.pem bytes=188900 skipped_certificates=59
+000084 +0000018623ms INFO  tls: handshake begin host=login.nvidia.com
+000085 +0000018714ms INFO  tls: connect complete host=login.nvidia.com port=443 spins=0 elapsed_ms=232
+000086 +0000018790ms INFO  http: request end method=POST url=https://login.nvidia.com/token status=400 response_bytes=97 elapsed_ms=366
+000087 +0000023801ms INFO  http: request begin method=POST url=https://login.nvidia.com/token request_bytes=218 headers=5
+000088 +0000023853ms INFO  tls: connect begin host=login.nvidia.com port=443 ca=game:\cacert.pem
+000089 +0000023856ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000090 +0000023876ms INFO  dns: lookup complete host=login.nvidia.com status=0 addresses=3 elapsed_ms=18
+000091 +0000023878ms INFO  socket: resolved endpoint host=login.nvidia.com ipv4=52.6.228.73 port=443 raw=0x3406e449
+000092 +0000023880ms DEBUG socket: probe attempt=1 strategy=5801-only create=0x1f331000 wsa=0
+000093 +0000023903ms INFO  socket: probe result strategy=5801-only opt5802=0/0 opt5801=0/0 connect=0/0 elapsed_ms=50
+000094 +0000023905ms DEBUG tls: CA load begin path=game:\cacert.pem
+000095 +0000023953ms INFO  tls: CA load complete path=game:\cacert.pem bytes=188900 skipped_certificates=59
+000096 +0000023974ms INFO  tls: handshake begin host=login.nvidia.com
+000097 +0000024054ms INFO  tls: connect complete host=login.nvidia.com port=443 spins=0 elapsed_ms=201
+000098 +0000024106ms INFO  http: request end method=POST url=https://login.nvidia.com/token status=400 response_bytes=97 elapsed_ms=305
+000099 +0000029140ms INFO  http: request begin method=POST url=https://login.nvidia.com/token request_bytes=218 headers=5
+000100 +0000029194ms INFO  tls: connect begin host=login.nvidia.com port=443 ca=game:\cacert.pem
+000101 +0000029195ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000102 +0000029209ms INFO  dns: lookup complete host=login.nvidia.com status=0 addresses=3 elapsed_ms=12
+000103 +0000029211ms INFO  socket: resolved endpoint host=login.nvidia.com ipv4=54.227.136.94 port=443 raw=0x36e3885e
+000104 +0000029214ms DEBUG socket: probe attempt=1 strategy=5801-only create=0x1f332000 wsa=0
+000105 +0000029239ms INFO  socket: probe result strategy=5801-only opt5802=0/0 opt5801=0/0 connect=0/0 elapsed_ms=45
+000106 +0000029241ms DEBUG tls: CA load begin path=game:\cacert.pem
+000107 +0000029315ms INFO  tls: CA load complete path=game:\cacert.pem bytes=188900 skipped_certificates=59
+000108 +0000029335ms INFO  tls: handshake begin host=login.nvidia.com
+000109 +0000029420ms INFO  tls: connect complete host=login.nvidia.com port=443 spins=0 elapsed_ms=226
+000110 +0000029467ms INFO  http: request end method=POST url=https://login.nvidia.com/token status=400 response_bytes=97 elapsed_ms=327
+000111 +0000034491ms INFO  http: request begin method=POST url=https://login.nvidia.com/token request_bytes=218 headers=5
+000112 +0000034544ms INFO  tls: connect begin host=login.nvidia.com port=443 ca=game:\cacert.pem
+000113 +0000034546ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000114 +0000034552ms INFO  dns: lookup complete host=login.nvidia.com status=0 addresses=3 elapsed_ms=4
+000115 +0000034554ms INFO  socket: resolved endpoint host=login.nvidia.com ipv4=52.6.228.73 port=443 raw=0x3406e449
+000116 +0000034556ms DEBUG socket: probe attempt=1 strategy=5801-only create=0x1f333000 wsa=0
+000117 +0000034576ms INFO  socket: probe result strategy=5801-only opt5802=0/0 opt5801=0/0 connect=0/0 elapsed_ms=32
+000118 +0000034578ms DEBUG tls: CA load begin path=game:\cacert.pem
+000119 +0000034642ms INFO  tls: CA load complete path=game:\cacert.pem bytes=188900 skipped_certificates=59
+000120 +0000034662ms INFO  tls: handshake begin host=login.nvidia.com
+000121 +0000034755ms INFO  tls: connect complete host=login.nvidia.com port=443 spins=0 elapsed_ms=211
+000122 +0000035098ms INFO  http: request end method=POST url=https://login.nvidia.com/token status=200 response_bytes=1254 elapsed_ms=607
+000123 +0000035176ms INFO  http: request begin method=GET url=https://login.nvidia.com/userinfo request_bytes=0 headers=3
+000124 +0000035178ms INFO  tls: connect begin host=login.nvidia.com port=443 ca=game:\cacert.pem
+000125 +0000035180ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000126 +0000035188ms INFO  dns: lookup complete host=login.nvidia.com status=0 addresses=3 elapsed_ms=6
+000127 +0000035191ms INFO  socket: resolved endpoint host=login.nvidia.com ipv4=44.208.249.235 port=443 raw=0x2cd0f9eb
+000128 +0000035194ms DEBUG socket: probe attempt=1 strategy=5801-only create=0x1f334000 wsa=0
+000129 +0000035222ms INFO  socket: probe result strategy=5801-only opt5802=0/0 opt5801=0/0 connect=0/0 elapsed_ms=44
+000130 +0000035223ms DEBUG tls: CA load begin path=game:\cacert.pem
+000131 +0000035288ms INFO  tls: CA load complete path=game:\cacert.pem bytes=188900 skipped_certificates=59
+000132 +0000035292ms INFO  tls: handshake begin host=login.nvidia.com
+000133 +0000035376ms INFO  tls: connect complete host=login.nvidia.com port=443 spins=0 elapsed_ms=198
+000134 +0000035416ms INFO  http: request end method=GET url=https://login.nvidia.com/userinfo status=200 response_bytes=386 elapsed_ms=240
+000135 +0000035451ms INFO  storage: session file write path=game:\opennow_session.json result=1
+000136 +0000035453ms INFO  auth: QR login complete session_persisted=1
+000137 +0000035471ms INFO  catalog: fetching authenticated catalog
+000138 +0000035500ms INFO  http: request begin method=GET url=https://prod.cloudmatchbeta.nvidiagrid.net/v2/serverInfo request_bytes=0 headers=15
+000139 +0000035502ms INFO  tls: connect begin host=prod.cloudmatchbeta.nvidiagrid.net port=443 ca=game:\cacert.pem
+000140 +0000035504ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000141 +0000035548ms INFO  dns: lookup complete host=prod.cloudmatchbeta.nvidiagrid.net status=0 addresses=5 elapsed_ms=42
+000142 +0000035550ms INFO  socket: resolved endpoint host=prod.cloudmatchbeta.nvidiagrid.net ipv4=66.22.140.147 port=443 raw=0x42168c93
+000143 +0000035552ms DEBUG socket: probe attempt=1 strategy=5801-only create=0x1f335000 wsa=0
+000144 +0000035563ms INFO  socket: probe result strategy=5801-only opt5802=0/0 opt5801=0/0 connect=0/0 elapsed_ms=61
+000145 +0000035565ms DEBUG tls: CA load begin path=game:\cacert.pem
+000146 +0000035648ms INFO  tls: CA load complete path=game:\cacert.pem bytes=188900 skipped_certificates=59
+000147 +0000035669ms INFO  tls: handshake begin host=prod.cloudmatchbeta.nvidiagrid.net
+000148 +0000035734ms INFO  tls: connect complete host=prod.cloudmatchbeta.nvidiagrid.net port=443 spins=0 elapsed_ms=232
+000149 +0000035757ms INFO  http: request end method=GET url=https://prod.cloudmatchbeta.nvidiagrid.net/v2/serverInfo status=200 response_bytes=9204 elapsed_ms=257
+000150 +0000035762ms INFO  http: request begin method=POST url=https://games.geforce.com/graphql request_bytes=720 headers=16
+000151 +0000035764ms INFO  tls: connect begin host=games.geforce.com port=443 ca=game:\cacert.pem
+000152 +0000035766ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000153 +0000035794ms INFO  dns: lookup complete host=games.geforce.com status=0 addresses=4 elapsed_ms=26
+000154 +0000035796ms INFO  socket: resolved endpoint host=games.geforce.com ipv4=13.225.196.29 port=443 raw=0x0de1c41d
+000155 +0000035798ms DEBUG socket: probe attempt=1 strategy=5801-only create=0x1f336000 wsa=0
+000156 +0000035805ms INFO  socket: probe result strategy=5801-only opt5802=0/0 opt5801=0/0 connect=0/0 elapsed_ms=41
+000157 +0000035806ms DEBUG tls: CA load begin path=game:\cacert.pem
+000158 +0000035884ms INFO  tls: CA load complete path=game:\cacert.pem bytes=188900 skipped_certificates=59
+000159 +0000035888ms INFO  tls: handshake begin host=games.geforce.com
+000160 +0000035934ms INFO  tls: connect complete host=games.geforce.com port=443 spins=0 elapsed_ms=170
+000161 +0000037266ms INFO  http: request end method=POST url=https://games.geforce.com/graphql status=200 response_bytes=350044 elapsed_ms=1504
+000162 +0000037383ms INFO  http: request begin method=POST url=https://games.geforce.com/graphql request_bytes=724 headers=16
+000163 +0000037386ms INFO  tls: connect begin host=games.geforce.com port=443 ca=game:\cacert.pem
+000164 +0000037388ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000165 +0000037396ms INFO  dns: lookup complete host=games.geforce.com status=0 addresses=4 elapsed_ms=6
+000166 +0000037398ms INFO  socket: resolved endpoint host=games.geforce.com ipv4=13.225.196.118 port=443 raw=0x0de1c476
+000167 +0000037400ms DEBUG socket: probe attempt=1 strategy=5801-only create=0x1f337000 wsa=0
+000168 +0000037407ms INFO  socket: probe result strategy=5801-only opt5802=0/0 opt5801=0/0 connect=0/0 elapsed_ms=21
+000169 +0000037409ms DEBUG tls: CA load begin path=game:\cacert.pem
+000170 +0000037476ms INFO  tls: CA load complete path=game:\cacert.pem bytes=188900 skipped_certificates=59
+000171 +0000037481ms INFO  tls: handshake begin host=games.geforce.com
+000172 +0000037541ms INFO  tls: connect complete host=games.geforce.com port=443 spins=0 elapsed_ms=155
+000173 +0000038650ms INFO  http: request end method=POST url=https://games.geforce.com/graphql status=200 response_bytes=360955 elapsed_ms=1267
+000174 +0000038768ms INFO  http: request begin method=POST url=https://games.geforce.com/graphql request_bytes=724 headers=16
+000175 +0000038770ms INFO  tls: connect begin host=games.geforce.com port=443 ca=game:\cacert.pem
+000176 +0000038772ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000177 +0000038782ms INFO  dns: lookup complete host=games.geforce.com status=0 addresses=4 elapsed_ms=8
+000178 +0000038785ms INFO  socket: resolved endpoint host=games.geforce.com ipv4=13.225.196.29 port=443 raw=0x0de1c41d
+000179 +0000038788ms DEBUG socket: probe attempt=1 strategy=5801-only create=0x1f338000 wsa=0
+000180 +0000038795ms INFO  socket: probe result strategy=5801-only opt5802=0/0 opt5801=0/0 connect=0/0 elapsed_ms=25
+000181 +0000038797ms DEBUG tls: CA load begin path=game:\cacert.pem
+000182 +0000038872ms INFO  tls: CA load complete path=game:\cacert.pem bytes=188900 skipped_certificates=59
+000183 +0000038878ms INFO  tls: handshake begin host=games.geforce.com
+000184 +0000038925ms INFO  tls: connect complete host=games.geforce.com port=443 spins=0 elapsed_ms=155
+000185 +0000039987ms INFO  http: request end method=POST url=https://games.geforce.com/graphql status=200 response_bytes=335445 elapsed_ms=1219
+000186 +0000040104ms INFO  catalog: catalog tabs prepared all=360 library=1
+000187 +0000045288ms INFO  catalog: tab changed tab=library
+000188 +0000046755ms INFO  catalog: selected title=Alan Wake 2 store=EPIC app_id_length=9
+000189 +0000046804ms INFO  session: starting CloudMatch resolution=1280x720 fps=60 bitrate_kbps=12000
+000190 +0000046808ms INFO  http: request begin method=POST url=https://prod.cloudmatchbeta.nvidiagrid.net/v2/nettestsession request_bytes=137 headers=16
+000191 +0000046811ms INFO  tls: connect begin host=prod.cloudmatchbeta.nvidiagrid.net port=443 ca=game:\cacert.pem
+000192 +0000046813ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000193 +0000046829ms INFO  dns: lookup complete host=prod.cloudmatchbeta.nvidiagrid.net status=0 addresses=5 elapsed_ms=14
+000194 +0000046831ms INFO  socket: resolved endpoint host=prod.cloudmatchbeta.nvidiagrid.net ipv4=66.22.140.135 port=443 raw=0x42168c87
+000195 +0000046833ms DEBUG socket: probe attempt=1 strategy=5801-only create=0x1f339000 wsa=0
+000196 +0000046845ms INFO  socket: probe result strategy=5801-only opt5802=0/0 opt5801=0/0 connect=0/0 elapsed_ms=34
+000197 +0000046847ms DEBUG tls: CA load begin path=game:\cacert.pem
+000198 +0000046901ms INFO  tls: CA load complete path=game:\cacert.pem bytes=188900 skipped_certificates=59
+000199 +0000046905ms INFO  tls: handshake begin host=prod.cloudmatchbeta.nvidiagrid.net
+000200 +0000046962ms INFO  tls: connect complete host=prod.cloudmatchbeta.nvidiagrid.net port=443 spins=0 elapsed_ms=151
+000201 +0000047156ms INFO  http: request end method=POST url=https://prod.cloudmatchbeta.nvidiagrid.net/v2/nettestsession status=200 response_bytes=1607 elapsed_ms=348
+000202 +0000047159ms INFO  session: network test HTTP=200 id_present=1
+000203 +0000047162ms INFO  http: request begin method=POST url=https://prod.cloudmatchbeta.nvidiagrid.net/v2/session request_bytes=1533 headers=16
+000204 +0000047164ms INFO  tls: connect begin host=prod.cloudmatchbeta.nvidiagrid.net port=443 ca=game:\cacert.pem
+000205 +0000047166ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000206 +0000047184ms INFO  dns: lookup complete host=prod.cloudmatchbeta.nvidiagrid.net status=0 addresses=5 elapsed_ms=16
+000207 +0000047187ms INFO  socket: resolved endpoint host=prod.cloudmatchbeta.nvidiagrid.net ipv4=66.22.140.147 port=443 raw=0x42168c93
+000208 +0000047189ms DEBUG socket: probe attempt=1 strategy=5801-only create=0x1f33a000 wsa=0
+000209 +0000047198ms INFO  socket: probe result strategy=5801-only opt5802=0/0 opt5801=0/0 connect=0/0 elapsed_ms=34
+000210 +0000047200ms DEBUG tls: CA load begin path=game:\cacert.pem
+000211 +0000047278ms INFO  tls: CA load complete path=game:\cacert.pem bytes=188900 skipped_certificates=59
+000212 +0000047298ms INFO  tls: handshake begin host=prod.cloudmatchbeta.nvidiagrid.net
+000213 +0000047342ms INFO  tls: connect complete host=prod.cloudmatchbeta.nvidiagrid.net port=443 spins=0 elapsed_ms=178
+000214 +0000047646ms INFO  http: request end method=POST url=https://prod.cloudmatchbeta.nvidiagrid.net/v2/session status=200 response_bytes=4187 elapsed_ms=484
+000215 +0000047755ms INFO  session: start response HTTP=200 api_status=1 patching=0 description=SUCCESS_STATUS
+000216 +0000047759ms INFO  session: CloudMatch session created id_length=36 status=1
+000217 +0000047801ms INFO  session: poll status=1 queue=0 patching=0 signaling=0 media=0 elapsed_s=0
+000218 +0000052817ms INFO  http: request begin method=GET url=https://prod.cloudmatchbeta.nvidiagrid.net/v2/session/<redacted> request_bytes=0 headers=15
+000219 +0000052872ms INFO  tls: connect begin host=prod.cloudmatchbeta.nvidiagrid.net port=443 ca=game:\cacert.pem
+000220 +0000052874ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000221 +0000052889ms INFO  dns: lookup complete host=prod.cloudmatchbeta.nvidiagrid.net status=0 addresses=5 elapsed_ms=13
+000222 +0000052891ms INFO  socket: resolved endpoint host=prod.cloudmatchbeta.nvidiagrid.net ipv4=66.22.140.134 port=443 raw=0x42168c86
+000223 +0000052893ms DEBUG socket: probe attempt=1 strategy=5801-only create=0x1f33b000 wsa=0
+000224 +0000052908ms INFO  socket: probe result strategy=5801-only opt5802=0/0 opt5801=0/0 connect=0/0 elapsed_ms=36
+000225 +0000052910ms DEBUG tls: CA load begin path=game:\cacert.pem
+000226 +0000052976ms INFO  tls: CA load complete path=game:\cacert.pem bytes=188900 skipped_certificates=59
+000227 +0000052997ms INFO  tls: handshake begin host=prod.cloudmatchbeta.nvidiagrid.net
+000228 +0000053048ms INFO  tls: connect complete host=prod.cloudmatchbeta.nvidiagrid.net port=443 spins=0 elapsed_ms=176
+000229 +0000053085ms INFO  http: request end method=GET url=https://prod.cloudmatchbeta.nvidiagrid.net/v2/session/<redacted> status=200 response_bytes=2326 elapsed_ms=268
+000230 +0000053140ms INFO  session: poll status=1 queue=0 patching=0 signaling=1 media=1 elapsed_s=5
+000231 +0000058157ms INFO  http: request begin method=GET url=https://prod.cloudmatchbeta.nvidiagrid.net/v2/session/<redacted> request_bytes=0 headers=15
+000232 +0000058211ms INFO  tls: connect begin host=prod.cloudmatchbeta.nvidiagrid.net port=443 ca=game:\cacert.pem
+000233 +0000058213ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000234 +0000058227ms INFO  dns: lookup complete host=prod.cloudmatchbeta.nvidiagrid.net status=0 addresses=5 elapsed_ms=12
+000235 +0000058229ms INFO  socket: resolved endpoint host=prod.cloudmatchbeta.nvidiagrid.net ipv4=66.22.140.146 port=443 raw=0x42168c92
+000236 +0000058232ms DEBUG socket: probe attempt=1 strategy=5801-only create=0x1f33c000 wsa=0
+000237 +0000058249ms INFO  socket: probe result strategy=5801-only opt5802=0/0 opt5801=0/0 connect=0/0 elapsed_ms=38
+000238 +0000058251ms DEBUG tls: CA load begin path=game:\cacert.pem
+000239 +0000058318ms INFO  tls: CA load complete path=game:\cacert.pem bytes=188900 skipped_certificates=59
+000240 +0000058337ms INFO  tls: handshake begin host=prod.cloudmatchbeta.nvidiagrid.net
+000241 +0000058393ms INFO  tls: connect complete host=prod.cloudmatchbeta.nvidiagrid.net port=443 spins=0 elapsed_ms=182
+000242 +0000058445ms INFO  http: request end method=GET url=https://prod.cloudmatchbeta.nvidiagrid.net/v2/session/<redacted> status=200 response_bytes=2720 elapsed_ms=288
+000243 +0000058449ms INFO  session: starting WebRTC signaling_url_length=59 media_host_length=43 media_port=48322 ice_servers=0
+000244 +0000058455ms INFO  webrtc: start begin target=1280x720 fps=60 ice_servers=0
+000245 +0000058457ms INFO  video-decode: FFmpeg H.264 decoder registered explicitly
+000246 +0000058459ms INFO  video-decode: FFmpeg H.264 open begin version=54 target=1280x720 fps=60
+000247 +0000058463ms DEBUG video-decode: context allocation returned ptr=40055990
+000248 +0000058465ms DEBUG video-decode: frame allocation returned ptr=40055D80
+000249 +0000058468ms INFO  video-decode: avcodec_open2 begin codec=h264 single_thread=1
+000250 +0000058471ms INFO  video-decode: FFmpeg H.264 open complete threads=1 type=0
+000251 +0000058473ms INFO  audio-decode: Opus open begin rate=48000 channels=2
+000252 +0000058475ms INFO  audio-decode: Opus open complete
+000253 +0000058482ms INFO  libpeer: socket.c:89 XNet UDP unencrypted options fd=523489280 opt5802=0/0 opt5801=0/0
+000254 +0000058483ms INFO  libpeer: socket.c:107 UDP receive buffer: 64512 bytes
+000255 +0000058485ms INFO  libpeer: socket.c:154 UDP socket ready fd=523489280 type_rc=0 type=2 local=0.0.0.0:1050 raw_addr=0x00000000
+000256 +0000058488ms INFO  libpeer: agent.c:38 create IPv4 UDP socket: 523489280
+000257 +0000058490ms INFO  webrtc: peer connection created pc=400B2C40 configured_ice=1
+000258 +0000058494ms INFO  websocket: connect begin url=wss://66-22-140-146.cloudmatchbeta.nvidiagrid.net:443/nvst/sign_in headers=3
+000259 +0000058496ms INFO  tls: connect begin host=66-22-140-146.cloudmatchbeta.nvidiagrid.net port=443 ca=game:\cacert.pem
+000260 +0000058498ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000261 +0000058513ms INFO  dns: lookup complete host=66-22-140-146.cloudmatchbeta.nvidiagrid.net status=0 addresses=1 elapsed_ms=12
+000262 +0000058514ms INFO  socket: resolved endpoint host=66-22-140-146.cloudmatchbeta.nvidiagrid.net ipv4=66.22.140.146 port=443 raw=0x42168c92
+000263 +0000058516ms DEBUG socket: probe attempt=1 strategy=5801-only create=0x1f33e001 wsa=0
+000264 +0000058547ms INFO  socket: probe result strategy=5801-only opt5802=0/0 opt5801=0/0 connect=0/0 elapsed_ms=51
+000265 +0000058549ms DEBUG tls: CA load begin path=game:\cacert.pem
+000266 +0000058613ms INFO  tls: CA load complete path=game:\cacert.pem bytes=188900 skipped_certificates=59
+000267 +0000058634ms INFO  tls: handshake begin host=66-22-140-146.cloudmatchbeta.nvidiagrid.net
+000268 +0000058683ms INFO  tls: connect complete host=66-22-140-146.cloudmatchbeta.nvidiagrid.net port=443 spins=0 elapsed_ms=187
+000269 +0000058735ms INFO  websocket: connect complete url=wss://66-22-140-146.cloudmatchbeta.nvidiagrid.net:443/nvst/sign_in
+000270 +0000058737ms INFO  stream: WebRTC start returned success state=signaling connected
+000271 +0000058743ms DEBUG signaling: received messages=2
+000272 +0000058775ms DEBUG signaling: received messages=2
+000273 +0000058791ms INFO  signaling: offer received bytes=3164 remote_peer=1
+000274 +0000058793ms INFO  signaling: remote description applied; creating answer
+000275 +0000059367ms INFO  libpeer: peer_connection.c:958 ice server: stun:s1.stun.gamestream.nvidia.com:19308
+000276 +0000059419ms INFO  libpeer: ports.c:139 STUN DNS alias normalized s1.stun.gamestream.nvidia.com -> nv.stun.gamestream.nvidia.com
+000277 +0000059675ms INFO  libpeer: ports.c:200 Resolved s1.stun.gamestream.nvidia.com -> 52.10.212.90 raw=0x340ad45a
+000278 +0000059842ms INFO  libpeer: agent.c:289 Resolved stun/turn server 52.10.212.90:19308
+000279 +0000059844ms INFO  libpeer: socket.c:204 UDP connect fd=523489280 endpoint_raw=0x340ad45a port=19308 rc=-1 wsa=10065
+000280 +0000059846ms ERROR libpeer: agent.c:172 Failed to send STUN Binding Request.
+000281 +0000059848ms INFO  ice: local candidates queued callback_bytes=902 queue=1
+000282 +0000059850ms INFO  webrtc-state: state changed code=2 name=checking rtt_ms=-1 local_ice=0 remote_ice=0 pairs=0 frozen=0 checking=0 ok=0 failed=0
+000283 +0000059855ms INFO  signaling: answer created sdp_bytes=943 nvst_bytes=2100 queued_candidates=1
+000284 +0000059858ms INFO  ice: local candidate signaling complete sent=1 total=1
+000285 +0000059863ms INFO  ice: manual fallback scheduled ports=48322,47998,47999 candidates=3 media_hint_port=48322
+000286 +0000059867ms DEBUG signaling: received messages=2
+000287 +0000059882ms DEBUG signaling: received messages=1
+000288 +0000059884ms INFO  ice: remote trickle candidate rc=0 bytes=67
+000289 +0000059886ms INFO  webrtc-state: state changed code=5 name=failed rtt_ms=-1 local_ice=1 remote_ice=1 pairs=0 frozen=0 checking=0 ok=0 failed=0
+000290 +0000059890ms INFO  stream: stopping media and CloudMatch session
+000291 +0000059892ms INFO  webrtc: stop begin state=failed video_packets=0 decoded=0 video_failures=0 audio_packets=0 audio_failures=0 input_packets=0
+000292 +0000059895ms INFO  websocket: connection closed
+000293 +0000059897ms INFO  webrtc: stop complete
+000294 +0000059899ms INFO  http: request begin method=DELETE url=https://prod.cloudmatchbeta.nvidiagrid.net/v2/session/<redacted> request_bytes=0 headers=15
+000295 +0000059901ms INFO  tls: connect begin host=prod.cloudmatchbeta.nvidiagrid.net port=443 ca=game:\cacert.pem
+000296 +0000059903ms INFO  socket: preflight mode=XNet bypass-security plus DashLaunch sockpatch
+000297 +0000059915ms INFO  dns: lookup complete host=prod.cloudmatchbeta.nvidiagrid.net status=0 addresses=5 elapsed_ms=10
+000298 +0000059917ms INFO  socket: resolved endpoint host=prod.cloudmatchbeta.nvidiagrid.net ipv4=66.22.140.145 port=443 raw=0x42168c91
+000299 +0000059919ms DEBUG socket: probe attempt=1 strategy=5801-only create=0x1f33f000 wsa=0
+000300 +0000059931ms INFO  socket: probe result strategy=5801-only opt5802=0/0 opt5801=0/0 connect=0/0 elapsed_ms=30
+000301 +0000059933ms DEBUG tls: CA load begin path=game:\cacert.pem
+000302 +0000060025ms INFO  tls: CA load complete path=game:\cacert.pem bytes=188900 skipped_certificates=59
+000303 +0000060045ms INFO  tls: handshake begin host=prod.cloudmatchbeta.nvidiagrid.net
+000304 +0000060101ms INFO  tls: connect complete host=prod.cloudmatchbeta.nvidiagrid.net port=443 spins=0 elapsed_ms=200
+000305 +0000060219ms INFO  http: request end method=DELETE url=https://prod.cloudmatchbeta.nvidiagrid.net/v2/session/<redacted> status=200 response_bytes=235 elapsed_ms=320
+000306 +0000060221ms INFO  session: session shutdown complete
+000307 +0000060249ms INFO  main: waiting for controller A before returning
+000308 +0000067151ms INFO  main: controller A received; application returning
+000309 +0000067201ms INFO  logger: closing persistent log

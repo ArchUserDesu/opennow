@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#ifdef _WIN32
+#ifdef _XBOX
+#include <winsockx.h>
+#elif defined(_WIN32)
 #include <winsock2.h>
 #else
 #include <arpa/inet.h>

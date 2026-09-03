@@ -158,6 +158,7 @@ HttpResponse HttpClient::request(const std::string& method, const std::string& u
                                  const std::vector<std::string>& headers, const std::string& body) const {
 #if defined(OPENNOW_XDK)
     DWORD started = GetTickCount();
+    ON_LOGI("http", "request begin method=%s url=%s request_bytes=%u headers=%u", method.c_str(), safe_url(url).c_str(), (unsigned)body.size(), (unsigned)headers.size());
     std::string current = url;
     std::string current_method = method;
     std::string current_body = body;
@@ -171,6 +172,7 @@ HttpResponse HttpClient::request(const std::string& method, const std::string& u
         }
         if ((out.status_code == 301 || out.status_code == 302 || out.status_code == 303 ||
              out.status_code == 307 || out.status_code == 308) && !redirect.empty()) {
+            ON_LOGI("http", "redirect hop=%d status=%ld from=%s to=%s",hop,out.status_code,safe_url(current).c_str(),safe_url(redirect).c_str());
             ParsedUrl base = parse_url(current); current = resolve_redirect(base, redirect);
             if (out.status_code == 303 || ((out.status_code == 301 || out.status_code == 302) && current_method == "POST")) {
                 current_method = "GET"; current_body.clear();

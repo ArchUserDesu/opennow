@@ -119,7 +119,7 @@ typedef struct SctpInitChunk {
   uint16_t number_of_outbound_streams;
   uint16_t number_of_inbound_streams;
   uint32_t initial_tsn;
-  SctpChunkParam param[0];
+  uint8_t params[0];
 
 } SctpInitChunk;
 

@@ -21,7 +21,13 @@
 #endif
 
 #if LOG_REDIRECT
+#ifdef __cplusplus
+extern "C" {
+#endif
 void peer_log(char* level_tag, const char* file_name, int line_number, const char* fmt, ...);
+#ifdef __cplusplus
+}
+#endif
 #define LOG_PRINT(level_tag, fmt, ...) \
   peer_log(level_tag, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #else

@@ -406,7 +406,7 @@ void* peer_connection_get_sctp(PeerConnection* pc) {
 }
 
 PeerConnection* peer_connection_create(PeerConfiguration* config) {
-  PeerConnection* pc = calloc(1, sizeof(PeerConnection));
+  PeerConnection* pc = (PeerConnection*)calloc(1, sizeof(PeerConnection));
   if (!pc) {
     return NULL;
   }
@@ -531,7 +531,7 @@ int peer_connection_create_datachannel_sid(PeerConnection* pc, DecpChannelType c
   uint32_t reliability_big_endian = htonl(reliability_parameter);
   uint16_t label_length = htons(strlen(label));
   uint16_t protocol_length = htons(strlen(protocol));
-  char* msg = calloc(1, msg_size);
+  char* msg = (char*)calloc(1, msg_size);
   if (!msg) {
     return rtrn;
   }
@@ -560,6 +560,7 @@ static char* peer_connection_dtls_role_setup_value(DtlsSrtpRole d) {
 int peer_connection_loop(PeerConnection* pc) {
   uint32_t ssrc = 0;
   int packet_processed = 0;
+  int dtls_ret = 0;
   memset(pc->agent_buf, 0, sizeof(pc->agent_buf));
   pc->agent_ret = -1;
 
@@ -589,7 +590,7 @@ int peer_connection_loop(PeerConnection* pc) {
 
       pc->dtls_handshake_attempts++;
 
-      int dtls_ret = dtls_srtp_handshake(&pc->dtls_srtp, NULL);
+      dtls_ret = dtls_srtp_handshake(&pc->dtls_srtp, NULL);
       if (dtls_ret == 0) {
         LOGD("DTLS-SRTP handshake done");
         peer_connection_diag_log("dtls_done attempts=%d datachannel=%d",
@@ -715,25 +716,33 @@ int peer_connection_loop(PeerConnection* pc) {
           }
 
           ssrc = rtp_get_ssrc(pc->agent_buf);
-          RtpPacket* rtp = (RtpPacket*)pc->agent_buf;
-          const int is_audio_payload = rtp->header.type == PT_PCMU ||
-                                       rtp->header.type == PT_PCMA ||
-                                       rtp->header.type == PT_OPUS ||
-                                       rtp->header.type == 63;
+          /* RTP wire fields must not be read through compiler-specific C
+             bitfields on big-endian Xenon. */
+          const uint8_t payload_type = pc->agent_buf[1] & 0x7f;
+          const int is_audio_payload = payload_type == PT_PCMU ||
+                                       payload_type == PT_PCMA ||
+                                       payload_type == PT_OPUS ||
+                                       payload_type == 63;
+          if (pc->completed_rtp_packets <= 12 || pc->completed_rtp_packets % 1200 == 0) {
+            LOGI("RTP decrypted packet=%d pt=%u ssrc=%" PRIu32 " bytes=%d expectedAudio=%" PRIu32 " expectedVideo=%" PRIu32 " route=%s",
+                 pc->completed_rtp_packets, payload_type, ssrc, pc->agent_ret,
+                 pc->remote_assrc, pc->remote_vssrc,
+                 (ssrc == pc->remote_assrc || (pc->remote_assrc == 0 && is_audio_payload)) ? "audio" : "video");
+          }
           if (ssrc == pc->remote_assrc || (pc->remote_assrc == 0 && is_audio_payload)) {
             if (pc->remote_assrc == 0) {
               pc->remote_assrc = ssrc;
               LOGI("Learned remote audio SSRC from RTP: %" PRIu32, pc->remote_assrc);
               peer_connection_diag_log("learned_audio_ssrc=%" PRIu32 " pt=%u",
-                                       pc->remote_assrc, rtp->header.type);
+                                       pc->remote_assrc, payload_type);
             }
             rtp_decoder_decode(&pc->artp_decoder, pc->agent_buf, pc->agent_ret);
           } else if (ssrc == pc->remote_vssrc ||
                      (pc->remote_vssrc == 0 &&
-                      rtp->header.type != PT_PCMU &&
-                      rtp->header.type != PT_PCMA &&
-                      rtp->header.type != PT_OPUS &&
-                      rtp->header.type != 63)) {
+                      payload_type != PT_PCMU &&
+                      payload_type != PT_PCMA &&
+                      payload_type != PT_OPUS &&
+                      payload_type != 63)) {
             if (pc->remote_vssrc == 0) {
               pc->remote_vssrc = ssrc;
               LOGI("Learned remote video SSRC from RTP: %" PRIu32, pc->remote_vssrc);

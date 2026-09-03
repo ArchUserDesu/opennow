@@ -25,23 +25,23 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
     <ClCompile>
       <Optimization>Disabled</Optimization><RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary><WarningLevel>Level3</WarningLevel>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\include;$(ProjectDir)compat;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\include;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\src;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\third_party\cJSON;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\third_party\mbedtls\include;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\third_party\libsrtp\include;$(ProjectDir)deps-src\jansson\src;$(ProjectDir)deps-src\opus\include;$(ProjectDir)deps-src\xbmc360\libraries\ffmpeg;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>_XBOX;OPENNOW_XDK=1;OPENNOW_HAVE_FFMPEG=1;CONFIG_USE_USRSCTP=0;DISABLE_PEER_SIGNALING=1;CONFIG_IPV6=0;MBEDTLS_CONFIG_FILE="mbedtls_xdk_config.h";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\include;$(ProjectDir)compat;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\src;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\include;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\third_party\cJSON;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\third_party\mbedtls\include;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\third_party\libsrtp\include;$(ProjectDir)deps-src\jansson\src;$(ProjectDir)deps-src\opus\include;$(ProjectDir)deps-src\xbmc360\libraries\ffmpeg;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_XBOX;NOMINMAX;OPENNOW_XDK=1;OPENNOW_HAVE_FFMPEG=1;CONFIG_USE_USRSCTP=0;DISABLE_PEER_SIGNALING=1;CONFIG_IPV6=0;MBEDTLS_CONFIG_FILE="mbedtls_xdk_config.h";%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(ProjectDir)lib\Debug;$(ProjectDir)deps-src\xbmc360\libraries\ffmpeg\vcproj\libavcodec\Xbox 360\Debug;$(ProjectDir)deps-src\xbmc360\libraries\ffmpeg\vcproj\libavutil\Xbox 360\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>peer.lib;srtp2.lib;mbedtls_opennow.lib;cjson.lib;jansson.lib;opus.lib;libavcodec.lib;libavutil.lib;xnet.lib;xapilib.lib;d3d9.lib;xaudio2.lib;xboxkrnl.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>peer.lib;srtp2.lib;mbedtls_opennow.lib;cjson.lib;jansson.lib;opus.lib;libavcodec.lib;libavutil.lib;xnet.lib;xauth.lib;xapilib.lib;d3d9.lib;xaudio2.lib;xboxkrnl.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
     <ClCompile>
       <Optimization>MaxSpeed</Optimization><IntrinsicFunctions>true</IntrinsicFunctions><FavorSizeOrSpeed>Speed</FavorSizeOrSpeed><RuntimeLibrary>MultiThreaded</RuntimeLibrary><WarningLevel>Level3</WarningLevel>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\include;$(ProjectDir)compat;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\include;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\src;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\third_party\cJSON;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\third_party\mbedtls\include;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\third_party\libsrtp\include;$(ProjectDir)deps-src\jansson\src;$(ProjectDir)deps-src\opus\include;$(ProjectDir)deps-src\xbmc360\libraries\ffmpeg;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>_XBOX;NDEBUG;OPENNOW_XDK=1;OPENNOW_HAVE_FFMPEG=1;CONFIG_USE_USRSCTP=0;DISABLE_PEER_SIGNALING=1;CONFIG_IPV6=0;MBEDTLS_CONFIG_FILE="mbedtls_xdk_config.h";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\include;$(ProjectDir)compat;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\src;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\include;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\third_party\cJSON;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\third_party\mbedtls\include;$(ProjectDir)deps-src\opennow-switch\extern\libpeer\third_party\libsrtp\include;$(ProjectDir)deps-src\jansson\src;$(ProjectDir)deps-src\opus\include;$(ProjectDir)deps-src\xbmc360\libraries\ffmpeg;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_XBOX;NOMINMAX;NDEBUG;OPENNOW_XDK=1;OPENNOW_HAVE_FFMPEG=1;CONFIG_USE_USRSCTP=0;DISABLE_PEER_SIGNALING=1;CONFIG_IPV6=0;MBEDTLS_CONFIG_FILE="mbedtls_xdk_config.h";%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(ProjectDir)lib\Release;$(ProjectDir)deps-src\xbmc360\libraries\ffmpeg\vcproj\libavcodec\Xbox 360\Release;$(ProjectDir)deps-src\xbmc360\libraries\ffmpeg\vcproj\libavutil\Xbox 360\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>peer.lib;srtp2.lib;mbedtls_opennow.lib;cjson.lib;jansson.lib;opus.lib;libavcodec.lib;libavutil.lib;xnet.lib;xapilib.lib;d3d9.lib;xaudio2.lib;xboxkrnl.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>peer.lib;srtp2.lib;mbedtls_opennow.lib;cjson.lib;jansson.lib;opus.lib;libavcodec.lib;libavutil.lib;xnet.lib;xauth.lib;xapilib.lib;d3d9.lib;xaudio2.lib;xboxkrnl.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

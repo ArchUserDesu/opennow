@@ -1,5 +1,6 @@
 #include "opennow/gfn_client.hpp"
 #include "opennow/json_util.hpp"
+#include "opennow/logger.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -20,6 +21,7 @@ extern "C" {
 }
 #elif defined(OPENNOW_XDK)
 #include <xtl.h>
+extern "C" void XeCryptRandom(BYTE* output, DWORD bytes);
 #endif
 
 namespace opennow {
@@ -236,6 +238,8 @@ static void parse_network(json_t* s, SessionInfo& out) {
         const int wanted_values[] = {2, 17, 14};
         for (size_t w = 0; w < sizeof(wanted_values) / sizeof(wanted_values[0]); ++w) {
             const int wanted = wanted_values[w];
+            std::string best_ip;
+            int best_port = 0;
             size_t i;
             json_t* x;
             json_array_foreach(ci, i, x) {
@@ -249,9 +253,9 @@ static void parse_network(json_t* s, SessionInfo& out) {
                 int port = ji(x, "port", 0);
                 if (!port)
                     port = port_from_url(rp);
-                if (out.media_ip.empty() && !ip.empty() && port > 0) {
-                    out.media_ip = ip;
-                    out.media_port = port;
+                if (!ip.empty() && port > 0 && (wanted != 14 || port > best_port)) {
+                    best_ip = ip;
+                    best_port = port;
                 }
                 if (out.signaling_url.empty() && wanted == 14) {
                     if (rp.find("wss://") == 0)
@@ -261,6 +265,11 @@ static void parse_network(json_t* s, SessionInfo& out) {
                     else if (!ip.empty())
                         out.signaling_url = "wss://" + ip + ":443/nvst/";
                 }
+            }
+            if (!best_ip.empty() && best_port > 0) {
+                out.media_ip = best_ip;
+                out.media_port = best_port;
+                break;
             }
         }
     }
@@ -283,6 +292,8 @@ static int status_value(json_t* v) {
         return 2;
     if (s == "streaming" || s == "playing" || s == "connected")
         return 3;
+    if (s.find("ad") != std::string::npos)
+        return 6;
     if (s.find("fail") != std::string::npos || s.find("error") != std::string::npos ||
         s.find("closed") != std::string::npos)
         return 4;
@@ -309,6 +320,24 @@ static SessionInfo parse_session_response(const std::string& b) {
     return o;
 }
 
+static bool is_app_patching(json_t* root) {
+    json_t* rs = root ? json_object_get(root, "requestStatus") : NULL;
+    return ji(rs, "statusCode", -1) == 41 &&
+           js(rs, "statusDescription").find("APP_PATCHING_STATUS") != std::string::npos;
+}
+
+static std::string cloudmatch_error(const char* stage, int http, json_t* root) {
+    json_t* rs = root ? json_object_get(root, "requestStatus") : NULL;
+    json_t* session = root ? json_object_get(root, "session") : NULL;
+    std::string out = std::string(stage) + " HTTP " + number_string(http) +
+        " statusCode=" + number_string(ji(rs, "statusCode", -1));
+    std::string description = js(rs, "statusDescription");
+    if (!description.empty()) out += " " + description;
+    std::string session_error = js(session, "errorDescription");
+    if (!session_error.empty()) out += " session=" + session_error;
+    return out;
+}
+
 static void append_metadata(json_t* meta, const char* key, const char* value) {
     json_t* m = json_object();
     json_object_set_new(m, "key", json_string(key));
@@ -316,7 +345,8 @@ static void append_metadata(json_t* meta, const char* key, const char* value) {
     json_array_append_new(meta, m);
 }
 
-static std::string build_session_body(const GameInfo& g, const AuthSession& s, const StreamConfig& c) {
+static std::string build_session_body(const GameInfo& g, const AuthSession& s, const StreamConfig& c,
+                                      const std::string& network_test_session_id) {
     json_t* root = json_object();
     json_t* req = json_object();
     long long app = 0;
@@ -329,7 +359,7 @@ static std::string build_session_body(const GameInfo& g, const AuthSession& s, c
     json_object_set_new(req, "cmsId", json_string(g.launch_app_id.c_str()));
     json_object_set_new(req, "internalTitle",
                         g.internal_title.empty() ? json_null() : json_string(g.internal_title.c_str()));
-    json_object_set_new(req, "networkTestSessionId", json_null());
+    json_object_set_new(req, "networkTestSessionId", network_test_session_id.empty() ? json_null() : json_string(network_test_session_id.c_str()));
     json_object_set_new(req, "parentSessionId", json_null());
     json_object_set_new(req, "clientIdentification", json_string("GFN-PC"));
     json_object_set_new(req, "deviceHashId", json_string(s.device_id.c_str()));
@@ -345,7 +375,7 @@ static std::string build_session_body(const GameInfo& g, const AuthSession& s, c
     json_object_set_new(req, "surroundAudioInfo", json_integer(0));
     json_object_set_new(req, "remoteControllersBitmap", json_integer(1));
     json_object_set_new(req, "enhancedStreamMode", json_integer(1));
-    json_object_set_new(req, "appLaunchMode", json_integer(1));
+    json_object_set_new(req, "appLaunchMode", json_integer(2));
     json_object_set_new(req, "secureRTSPSupported", json_false());
     json_object_set_new(req, "partnerCustomData", json_string(""));
     json_object_set_new(req, "accountLinked", json_true());
@@ -379,7 +409,8 @@ static std::string build_session_body(const GameInfo& g, const AuthSession& s, c
     json_object_set_new(req, "requestedStreamingFeatures", f);
 
     json_t* meta = json_array();
-    append_metadata(meta, "SubSessionId", "xenon");
+    const std::string sub_session_id = random_device_id();
+    append_metadata(meta, "SubSessionId", sub_session_id.c_str());
     append_metadata(meta, "wssignaling", "1");
     append_metadata(meta, "GSStreamerType", "WebRTC");
     json_object_set_new(req, "metaData", meta);
@@ -643,7 +674,8 @@ std::vector<GameInfo> GfnClient::fetch_catalog_games(AuthSession& s, const std::
 
     std::vector<GameInfo> out;
     std::string cursor;
-    for (int page = 0; page < 3; ++page) {
+    const int max_catalog_pages = 64;
+    for (int page = 0; page < max_catalog_pages; ++page) {
         json_t* root = json_object();
         json_t* vars = json_object();
         json_object_set_new(root, "query", json_string(search.empty() ? browse : searchq));
@@ -695,6 +727,7 @@ std::vector<GameInfo> GfnClient::fetch_catalog_games(AuthSession& s, const std::
                     json_t* vg = json_object_get(v, "gfn");
                     json_t* lib = vg ? json_object_get(vg, "library") : NULL;
                     gv.selected = jb(lib, "selected", false);
+                    if (gv.selected) g.in_library = true;
                     g.variants.push_back(gv);
                     if (g.launch_app_id.empty() || gv.selected) {
                         g.launch_app_id = gv.id;
@@ -709,8 +742,14 @@ std::vector<GameInfo> GfnClient::fetch_catalog_games(AuthSession& s, const std::
         json_t* pi = apps ? json_object_get(apps, "pageInfo") : NULL;
         const bool more = jb(pi, "hasNextPage", false);
         const std::string next = js(pi, "endCursor");
+        const int total = ji(pi, "totalCount", -1);
+        ON_LOGI("catalog", "page fetched page=%d items=%u accumulated=%u total=%d has_next=%d cursor_advanced=%d",
+                page + 1, (unsigned)json_array_size(items), (unsigned)out.size(), total,
+                more ? 1 : 0, (!next.empty() && next != cursor) ? 1 : 0);
         if (!more || next.empty() || next == cursor)
             break;
+        if (page + 1 == max_catalog_pages)
+            throw std::runtime_error("GFN catalog exceeded pagination safety limit");
         cursor = next;
     }
     return out;
@@ -722,10 +761,36 @@ SessionInfo GfnClient::start_session(AuthSession& s, const GameInfo& g, const St
     if (base.empty()) base = "https://prod.cloudmatchbeta.nvidiagrid.net/";
     if (base[base.size() - 1] != '/') base += '/';
     const std::string url = base + "v2/session?keyboardLayout=en-US_qwerty&languageCode=en_US";
-    HttpResponse r = http_.post(url, native_headers(s, true), build_session_body(g, s, c));
-    if (r.status_code < 200 || r.status_code >= 300)
-        throw std::runtime_error("start session HTTP " + number_string(r.status_code) + " " + r.body);
-    return parse_session_response(r.body);
+    const std::vector<std::string> headers = native_headers(s, true);
+    std::string network_test_id;
+    try {
+        json_t* nr = json_object(); json_t* nd = json_object(); json_t* profile = json_object();
+        json_object_set_new(profile, "widthInPixels", json_integer(c.width));
+        json_object_set_new(profile, "heightInPixels", json_integer(c.height));
+        json_object_set_new(profile, "framesPerSecond", json_integer(c.fps));
+        json_object_set_new(nd, "clientPlatformName", json_string("windows"));
+        json_object_set_new(nd, "netTestProfile", profile); json_object_set_new(nr, "netTestRequestData", nd);
+        const std::string net_body = dump_json(nr); json_decref(nr);
+        HttpResponse net = http_.post(base + "v2/nettestsession", headers, net_body);
+        if (net.status_code >= 200 && net.status_code < 300) {
+            JsonPtr nj = parse_json(net.body); json_t* rs = json_object_get(nj.get(), "requestStatus");
+            json_t* ns = json_object_get(nj.get(), "netTestSession");
+            if (ji(rs, "statusCode", -1) == 1) network_test_id = js(ns, "sessionId");
+        }
+        ON_LOGI("session", "network test HTTP=%d id_present=%d", net.status_code, network_test_id.empty()?0:1);
+    } catch (const std::exception& e) { ON_LOGW("session", "network test unavailable: %s", e.what()); }
+    HttpResponse r = http_.post(url, headers, build_session_body(g, s, c, network_test_id));
+    JsonPtr root(NULL, &json_decref);
+    try { root = parse_json(r.body); } catch (...) {}
+    const bool patching = root.get() && is_app_patching(root.get());
+    json_t* rs = root.get() ? json_object_get(root.get(), "requestStatus") : NULL;
+    const int api_status = ji(rs, "statusCode", -1);
+    ON_LOGI("session", "start response HTTP=%d api_status=%d patching=%d description=%s",
+            r.status_code, api_status, patching?1:0, js(rs,"statusDescription").c_str());
+    if ((!patching && (r.status_code < 200 || r.status_code >= 300)) ||
+        (root.get() && api_status != -1 && api_status != 1 && !patching))
+        throw std::runtime_error(cloudmatch_error("Start session", r.status_code, root.get()));
+    SessionInfo info = parse_session_response(r.body); info.app_patching = patching; return info;
 }
 
 SessionInfo GfnClient::poll_session(AuthSession& s, const std::string& id) const {
@@ -734,9 +799,16 @@ SessionInfo GfnClient::poll_session(AuthSession& s, const std::string& id) const
     if (base.empty()) base = "https://prod.cloudmatchbeta.nvidiagrid.net/";
     if (base[base.size() - 1] != '/') base += '/';
     HttpResponse r = http_.get(base + "v2/session/" + id, native_headers(s, false));
-    if (r.status_code < 200 || r.status_code >= 300)
-        throw std::runtime_error("poll session HTTP " + number_string(r.status_code));
+    JsonPtr root(NULL, &json_decref);
+    try { root = parse_json(r.body); } catch (...) {}
+    const bool patching = root.get() && is_app_patching(root.get());
+    json_t* rs = root.get() ? json_object_get(root.get(), "requestStatus") : NULL;
+    const int api_status = ji(rs, "statusCode", -1);
+    if ((!patching && (r.status_code < 200 || r.status_code >= 300)) ||
+        (root.get() && api_status != -1 && api_status != 1 && !patching))
+        throw std::runtime_error(cloudmatch_error("Poll session", r.status_code, root.get()));
     SessionInfo x = parse_session_response(r.body);
+    x.app_patching = patching;
     if (x.session_id.empty()) x.session_id = id;
     return x;
 }

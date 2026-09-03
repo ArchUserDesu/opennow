@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<xex>
+  <titleid id="0x4F4E0001"/> <!-- OpenNOW; supplies a normal title identity for HUD/XAM. -->
+  <!-- Required for normal title/HUD exit behavior and raw Internet sockets. -->
+  <privilege id="0"/> <!-- NoForceReboot -->
+  <privilege id="6"/> <!-- InsecureSockets -->
+</xex>

@@ -94,7 +94,7 @@ static int agent_socket_recv(Agent* agent, Address* addr, uint8_t* buf, int len)
   } else if (ret == 0) {
     // timeout
   } else {
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < sizeof(addr_type) / sizeof(addr_type[0]); i++) {
       if (FD_ISSET(agent->udp_sockets[i].fd, &rfds)) {
         memset(buf, 0, len);
         ret = udp_socket_recvfrom(&agent->udp_sockets[i], addr, buf, len);
@@ -119,8 +119,10 @@ static int agent_socket_recv_attempts(Agent* agent, Address* addr, uint8_t* buf,
 
 static int agent_socket_send(Agent* agent, Address* addr, const uint8_t* buf, int len) {
   switch (addr->family) {
+#if CONFIG_IPV6
     case AF_INET6:
       return udp_socket_sendto(&agent->udp_sockets[1], addr, buf, len);
+#endif
     case AF_INET:
     default:
       return udp_socket_sendto(&agent->udp_sockets[0], addr, buf, len);
@@ -179,8 +181,9 @@ static int agent_create_stun_addr(Agent* agent, Address* serv_addr) {
 
   stun_parse_msg_buf(&recv_msg);
   memcpy(&bind_addr, &recv_msg.mapped_addr, sizeof(Address));
-  IceCandidate* ice_candidate = agent->local_candidates + agent->local_candidates_count++;
+  IceCandidate* ice_candidate = agent->local_candidates + agent->local_candidates_count;
   ice_candidate_create(ice_candidate, agent->local_candidates_count, ICE_CANDIDATE_TYPE_SRFLX, &bind_addr);
+  agent->local_candidates_count++;
   return ret;
 }
 
@@ -237,13 +240,14 @@ static int agent_create_turn_addr(Agent* agent, Address* serv_addr, const char* 
 
   stun_parse_msg_buf(&recv_msg);
   memcpy(&turn_addr, &recv_msg.relayed_addr, sizeof(Address));
-  IceCandidate* ice_candidate = agent->local_candidates + agent->local_candidates_count++;
+  IceCandidate* ice_candidate = agent->local_candidates + agent->local_candidates_count;
   ice_candidate_create(ice_candidate, agent->local_candidates_count, ICE_CANDIDATE_TYPE_RELAY, &turn_addr);
+  agent->local_candidates_count++;
   return ret;
 }
 
 void agent_gather_candidate(Agent* agent, const char* urls, const char* username, const char* credential) {
-  char* pos;
+  const char* pos;
   int port;
   char hostname[64];
   char addr_string[ADDRSTRLEN];
@@ -268,7 +272,15 @@ void agent_gather_candidate(Agent* agent, const char* urls, const char* username
     return;
   }
 
-  snprintf(hostname, pos - urls - 5 + 1, "%s", urls + 5);
+  {
+    size_t hostname_len = (size_t)(pos - (urls + 5));
+    if (hostname_len == 0 || hostname_len >= sizeof(hostname)) {
+      LOGE("ICE server hostname length invalid: %u", (unsigned)hostname_len);
+      return;
+    }
+    memcpy(hostname, urls + 5, hostname_len);
+    hostname[hostname_len] = '\0';
+  }
 
   for (i = 0; i < sizeof(addr_type) / sizeof(addr_type[0]); i++) {
     if (ports_resolve_addr(hostname, &resolved_addr) == 0) {

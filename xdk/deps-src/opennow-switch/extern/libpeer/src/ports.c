@@ -54,7 +54,15 @@ int ports_get_host_addr(Address* addr, const char* iface_prefix) {
       break;
     }
   }
-#elif defined(__SWITCH__) || defined(_XBOX)
+#elif defined(_XBOX)
+  XNADDR xnaddr;
+  DWORD status = XNetGetTitleXnAddr(&xnaddr);
+  if (status != XNET_GET_XNADDR_NONE && status != XNET_GET_XNADDR_PENDING &&
+      addr->family == AF_INET) {
+    addr->sin.sin_addr = xnaddr.ina;
+    ret = 1;
+  }
+#elif defined(__SWITCH__)
   uint32_t ip = gethostid();
   if (ip != 0 && addr->family == AF_INET) {
       memcpy(&addr->sin.sin_addr, &ip, 4);
@@ -117,6 +125,43 @@ int ports_get_host_addr(Address* addr, const char* iface_prefix) {
 int ports_resolve_addr(const char* host, Address* addr) {
   char addr_string[ADDRSTRLEN];
   int ret = -1;
+#ifdef _XBOX
+  IN_ADDR resolved;
+  const char* lookup_host = host;
+  memset(addr, 0, sizeof(*addr));
+  resolved.s_addr = inet_addr(host);
+  if (resolved.s_addr == INADDR_NONE) {
+    XNDNS* dns = NULL;
+    /* Xbox DNS returns WSAHOST_NOT_FOUND for NVIDIA's s1 alias even though
+       its canonical name resolves.  Resolve the canonical target directly. */
+    if (strcmp(host, "s1.stun.gamestream.nvidia.com") == 0) {
+      lookup_host = "nv.stun.gamestream.nvidia.com";
+      LOGI("STUN DNS alias normalized %s -> %s", host, lookup_host);
+    }
+    int status = XNetDnsLookup(lookup_host, NULL, &dns);
+    if (status != 0 || dns == NULL) {
+      LOGE("XNetDnsLookup submit failed host=%s lookup=%s status=%d wsa=%d", host, lookup_host, status,
+           WSAGetLastError());
+      return ret;
+    }
+    while (dns->iStatus == WSAEINPROGRESS)
+      Sleep(1);
+    if (dns->iStatus == 0 && dns->cina > 0)
+      resolved = dns->aina[0];
+    else {
+      LOGE("XNetDnsLookup failed host=%s lookup=%s status=%d addresses=%u", host,
+           lookup_host, dns->iStatus, (unsigned)dns->cina);
+      resolved.s_addr = INADDR_NONE;
+    }
+    XNetDnsRelease(dns);
+  }
+  if (resolved.s_addr != INADDR_NONE) {
+    addr_set_family(addr, AF_INET);
+    addr->sin.sin_family = AF_INET;
+    addr->sin.sin_addr = resolved;
+    ret = 0;
+  }
+#else
   struct addrinfo hints, *res, *p;
   int status;
   memset(&hints, 0, sizeof(hints));
@@ -148,6 +193,12 @@ int ports_resolve_addr(const char* host, Address* addr) {
   addr_to_string(addr, addr_string, sizeof(addr_string));
   LOGI("Resolved %s -> %s", host, addr_string);
   freeaddrinfo(res);
+#endif
+  if (ret == 0) {
+    addr_to_string(addr, addr_string, sizeof(addr_string));
+    LOGI("Resolved %s -> %s raw=0x%08lx", host, addr_string,
+         addr->sin.sin_addr.s_addr);
+  }
   return ret;
 }
 

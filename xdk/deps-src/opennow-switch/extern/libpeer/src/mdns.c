@@ -22,7 +22,7 @@ typedef struct DnsHeader {
 
 typedef struct DnsAnswer {
   uint16_t type;
-  uint16_t class;
+  uint16_t dns_class;
   uint32_t ttl;
   uint16_t length;
   uint8_t data[0];
@@ -30,7 +30,7 @@ typedef struct DnsAnswer {
 
 typedef struct DnsQuery {
   uint16_t type;
-  uint16_t class;
+  uint16_t dns_class;
 } DnsQuery;
 
 static int mdns_add_hostname(const char* hostname, uint8_t* buf, int size) {
@@ -80,7 +80,7 @@ static int mdns_parse_answer(uint8_t* buf, int size, Address* addr, const char* 
   }
 
   answer = (DnsAnswer*)(buf + offset);
-  LOGD("type: %" PRIu16 ", class: %" PRIu16 ", ttl: %" PRIu32 ", length: %" PRIu16 "", ntohs(answer->type), ntohs(answer->class), ntohl(answer->ttl), ntohs(answer->length));
+  LOGD("type: %" PRIu16 ", class: %" PRIu16 ", ttl: %" PRIu32 ", length: %" PRIu16 "", ntohs(answer->type), ntohs(answer->dns_class), ntohl(answer->ttl), ntohs(answer->length));
   if (ntohs(answer->length) != 4) {
     LOGI("invalid length");
     return -1;
@@ -111,7 +111,7 @@ static int mdns_build_query(const char* hostname, uint8_t* buf, int size) {
 
   dns_query = (DnsQuery*)(buf + offset);
   dns_query->type = 0x0100;
-  dns_query->class = 0x0100;
+  dns_query->dns_class = 0x0100;
   return total_size;
 }
 

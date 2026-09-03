@@ -11,6 +11,16 @@ int clamp8(int value) {
     return std::max(0, std::min(255, value));
 }
 
+inline std::uint32_t convert_yuv_pixel(int yy, int red_chroma, int green_chroma, int blue_chroma) {
+    int c = yy - 16;
+    if (c < 0) c = 0;
+    const int luminance = 298 * c;
+    return 0xff000000u |
+        (static_cast<std::uint32_t>(clamp8((luminance + red_chroma) >> 8)) << 16) |
+        (static_cast<std::uint32_t>(clamp8((luminance + green_chroma) >> 8)) << 8) |
+        static_cast<std::uint32_t>(clamp8((luminance + blue_chroma) >> 8));
+}
+
 bool has_plane_bytes(const std::vector<std::uint8_t>& plane,
                      int stride,
                      int rows,
@@ -70,39 +80,33 @@ bool to_argb8888(const VideoFrame& frame, std::vector<std::uint32_t>& out) {
         return false;
     }
 
-    for (int y = 0; y < frame.height; ++y) {
-        for (int x = 0; x < frame.width; ++x) {
-            const int yy = frame.plane[0][static_cast<std::size_t>(y) * frame.stride[0] + x];
-            int uu = 0;
-            int vv = 0;
-
+    /* Traverse by 2x2 chroma blocks.  Four output pixels share U/V, cutting
+       chroma addressing and coefficient work by roughly 75 percent. */
+    const int chroma_width = (frame.width + 1) / 2;
+    const int chroma_height = (frame.height + 1) / 2;
+    for (int cy = 0; cy < chroma_height; ++cy) {
+        for (int cx = 0; cx < chroma_width; ++cx) {
+            int uu, vv;
             if (frame.format == PixelFormat_YUV420P) {
-                uu = frame.plane[1][static_cast<std::size_t>(y / 2) * frame.stride[1] + x / 2];
-                vv = frame.plane[2][static_cast<std::size_t>(y / 2) * frame.stride[2] + x / 2];
+                uu = frame.plane[1][static_cast<std::size_t>(cy) * frame.stride[1] + cx];
+                vv = frame.plane[2][static_cast<std::size_t>(cy) * frame.stride[2] + cx];
             } else {
-                const std::size_t uv_index =
-                    static_cast<std::size_t>(y / 2) * frame.stride[1] +
-                    static_cast<std::size_t>(x / 2) * 2;
-                uu = frame.plane[1][uv_index + 0];
-                vv = frame.plane[1][uv_index + 1];
+                const std::size_t uv = static_cast<std::size_t>(cy) * frame.stride[1] + static_cast<std::size_t>(cx) * 2;
+                uu = frame.plane[1][uv]; vv = frame.plane[1][uv + 1];
             }
-
-            int c = yy - 16;
-            const int d = uu - 128;
-            const int e = vv - 128;
-            if (c < 0) {
-                c = 0;
+            const int d = uu - 128, e = vv - 128;
+            const int red_chroma = 409 * e + 128;
+            const int green_chroma = -100 * d - 208 * e + 128;
+            const int blue_chroma = 516 * d + 128;
+            for (int dy = 0; dy < 2; ++dy) {
+                const int y = cy * 2 + dy; if (y >= frame.height) break;
+                const std::size_t yrow = static_cast<std::size_t>(y) * frame.stride[0];
+                const std::size_t outrow = static_cast<std::size_t>(y) * frame.width;
+                for (int dx = 0; dx < 2; ++dx) {
+                    const int x = cx * 2 + dx; if (x >= frame.width) break;
+                    out[outrow + x] = convert_yuv_pixel(frame.plane[0][yrow + x], red_chroma, green_chroma, blue_chroma);
+                }
             }
-
-            const int r = (298 * c + 409 * e + 128) >> 8;
-            const int g = (298 * c - 100 * d - 208 * e + 128) >> 8;
-            const int b = (298 * c + 516 * d + 128) >> 8;
-
-            out[static_cast<std::size_t>(y) * frame.width + x] =
-                0xff000000u |
-                (static_cast<std::uint32_t>(clamp8(r)) << 16) |
-                (static_cast<std::uint32_t>(clamp8(g)) << 8) |
-                static_cast<std::uint32_t>(clamp8(b));
         }
     }
     return true;

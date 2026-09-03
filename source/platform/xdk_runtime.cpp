@@ -2,13 +2,52 @@
 
 #include <xtl.h>
 #include <mbedtls/entropy.h>
+#include <mbedtls/timing.h>
 
 #include <stddef.h>
+#include <string.h>
 #include <time.h>
 
 // Exported by xboxkrnl on Xbox 360. This keeps TLS/WebRTC entropy sourced from
 // the console rather than falling back to rand()/time-based pseudo-randomness.
 extern "C" void XeCryptRandom(BYTE* output, DWORD bytes);
+
+static DWORD timing_load(const mbedtls_timing_hr_time* timer) {
+    DWORD started = 0;
+    memcpy(&started, timer->MBEDTLS_PRIVATE(opaque), sizeof(started));
+    return started;
+}
+
+extern "C" unsigned long mbedtls_timing_get_timer(mbedtls_timing_hr_time* timer, int reset) {
+    const DWORD now = GetTickCount();
+    DWORD started = timing_load(timer);
+    if (reset || started == 0) {
+        memset(timer->MBEDTLS_PRIVATE(opaque), 0, sizeof(timer->MBEDTLS_PRIVATE(opaque)));
+        memcpy(timer->MBEDTLS_PRIVATE(opaque), &now, sizeof(now));
+        return 0;
+    }
+    return (unsigned long)(now - started);
+}
+
+extern "C" void mbedtls_timing_set_delay(void* data, uint32_t int_ms, uint32_t fin_ms) {
+    mbedtls_timing_delay_context* ctx = (mbedtls_timing_delay_context*)data;
+    ctx->MBEDTLS_PRIVATE(int_ms) = int_ms;
+    ctx->MBEDTLS_PRIVATE(fin_ms) = fin_ms;
+    if (fin_ms != 0) mbedtls_timing_get_timer(&ctx->MBEDTLS_PRIVATE(timer), 1);
+}
+
+extern "C" int mbedtls_timing_get_delay(void* data) {
+    mbedtls_timing_delay_context* ctx = (mbedtls_timing_delay_context*)data;
+    if (ctx->MBEDTLS_PRIVATE(fin_ms) == 0) return -1;
+    const unsigned long elapsed = mbedtls_timing_get_timer(&ctx->MBEDTLS_PRIVATE(timer), 0);
+    if (elapsed >= ctx->MBEDTLS_PRIVATE(fin_ms)) return 2;
+    if (elapsed >= ctx->MBEDTLS_PRIVATE(int_ms)) return 1;
+    return 0;
+}
+
+extern "C" uint32_t mbedtls_timing_get_final_delay(const mbedtls_timing_delay_context* data) {
+    return data->MBEDTLS_PRIVATE(fin_ms);
+}
 
 extern "C" int mbedtls_hardware_poll(void* data, unsigned char* output,
                                       size_t len, size_t* olen) {

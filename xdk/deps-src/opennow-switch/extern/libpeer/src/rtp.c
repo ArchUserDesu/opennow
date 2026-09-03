@@ -165,7 +165,7 @@ static int rtp_encoder_encode_h264_fu_a(RtpEncoder* rtp_encoder, uint8_t* buf, s
   }
 
   NaluHeader* fu_indicator = (NaluHeader*)rtp_packet->payload;
-  FuHeader* fu_header = (FuHeader*)rtp_packet->payload + sizeof(NaluHeader);
+  FuHeader* fu_header = (FuHeader*)(rtp_packet->payload + sizeof(NaluHeader));
   fu_header->s = 1;
 
   while (size > 0) {
@@ -385,12 +385,11 @@ static void rtp_decoder_flush_access_unit(RtpDecoder* rtp_decoder) {
 
   if (!rtp_decoder->au_damaged && rtp_decoder->au_has_vcl && rtp_decoder->au_offset > 0) {
     if (rtp_decoder->on_video_packet != NULL) {
-      PeerVideoPacket packet = {
-        .data = rtp_decoder->au_buf,
-        .size = rtp_decoder->au_offset,
-        .timestamp = rtp_decoder->au_timestamp,
-        .ssrc = rtp_decoder->au_ssrc,
-      };
+      PeerVideoPacket packet;
+      packet.data = rtp_decoder->au_buf;
+      packet.size = rtp_decoder->au_offset;
+      packet.timestamp = rtp_decoder->au_timestamp;
+      packet.ssrc = rtp_decoder->au_ssrc;
       rtp_decoder->on_video_packet(&packet, rtp_decoder->user_data);
     } else if (rtp_decoder->on_packet != NULL)
       rtp_decoder->on_packet(rtp_decoder->au_buf, rtp_decoder->au_offset, rtp_decoder->user_data);
@@ -531,6 +530,7 @@ static int rtp_decode_h264(RtpDecoder* rtp_decoder, uint8_t* buf, size_t size) {
     rtp_decoder->sequence_gaps++;
     rtp_decoder->au_damaged = 1;
     if (rtp_decoder->fragment_started) {
+      if (rtp_decoder->sequence_gaps <= 4 || rtp_decoder->sequence_gaps % 100 == 0)
       LOGW("RTP H264: sequence gap inside fragmented NALU (%u -> %u)",
            rtp_decoder->last_seq_number, view.seq_number);
       rtp_decoder_reset_fragment(rtp_decoder);
@@ -583,15 +583,14 @@ static int rtp_decode_generic(RtpDecoder* rtp_decoder, uint8_t* buf, size_t size
     return -1;
 
   if (rtp_decoder->on_audio_packet != NULL) {
-    PeerAudioPacket packet = {
-      .data = view.payload,
-      .size = view.payload_size,
-      .timestamp = view.timestamp,
-      .ssrc = rtp_get_ssrc(buf),
-      .sequence = read_be16(buf + 2),
-      .payload_type = ((RtpHeader*)buf)->type,
-      .marker = view.marker,
-    };
+    PeerAudioPacket packet;
+    packet.data = view.payload;
+    packet.size = view.payload_size;
+    packet.timestamp = view.timestamp;
+    packet.ssrc = rtp_get_ssrc(buf);
+    packet.sequence = read_be16(buf + 2);
+    packet.payload_type = view.payload_type;
+    packet.marker = view.marker;
     rtp_decoder->on_audio_packet(&packet, rtp_decoder->user_data);
   } else if (rtp_decoder->on_packet != NULL)
     rtp_decoder->on_packet(view.payload, view.payload_size, rtp_decoder->user_data);
@@ -618,10 +617,10 @@ void rtp_decoder_init(RtpDecoder* rtp_decoder, MediaCodec codec, RtpOnPacket on_
     case CODEC_H264:
       rtp_decoder->type = PT_H264;
       rtp_decoder->nalu_capacity = CONFIG_MAX_NALU_SIZE;
-      rtp_decoder->nalu_buf = malloc(rtp_decoder->nalu_capacity);
+      rtp_decoder->nalu_buf = (uint8_t*)malloc(rtp_decoder->nalu_capacity);
       rtp_decoder->au_capacity = CONFIG_MAX_NALU_SIZE;
-      rtp_decoder->au_buf = malloc(rtp_decoder->au_capacity);
-      rtp_decoder->reorder_buf = malloc(RTP_REORDER_WINDOW * RTP_REORDER_PACKET_CAPACITY);
+      rtp_decoder->au_buf = (uint8_t*)malloc(rtp_decoder->au_capacity);
+      rtp_decoder->reorder_buf = (uint8_t*)malloc(RTP_REORDER_WINDOW * RTP_REORDER_PACKET_CAPACITY);
       if (!rtp_decoder->nalu_buf || !rtp_decoder->au_buf || !rtp_decoder->reorder_buf) {
         LOGE("RTP H264: failed to allocate decoder buffers");
         free(rtp_decoder->nalu_buf);
