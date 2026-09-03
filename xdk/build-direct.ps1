@@ -15,7 +15,6 @@ foreach ($tool in @($cl, $libTool, $imagexex)) {
 
 $env:XEDK = $XdkRoot
 $env:Path = (Join-Path $XdkRoot 'bin\win32') + ';' + $env:Path
-# The Xbox copy of shared headers (notably xnamath.h) must precede win32.
 $env:INCLUDE = (Join-Path $XdkRoot 'include\xbox') + ';' +
                (Join-Path $XdkRoot 'include\xbox\sys') + ';' +
                (Join-Path $XdkRoot 'include\win32')
@@ -23,8 +22,19 @@ $env:LIB = (Join-Path $XdkRoot 'lib\xbox') + ';' +
            (Join-Path $XdkRoot 'lib\win32')
 
 function Invoke-Checked([string]$Exe, [string[]]$Arguments) {
-  & $Exe @Arguments
-  if ($LASTEXITCODE -ne 0) { throw "Command failed ($LASTEXITCODE): $Exe" }
+  # Windows PowerShell 5 promotes native stderr records to ErrorRecord objects
+  # when ErrorActionPreference=Stop. XDK tools such as imagexex legitimately
+  # print banners/progress on stderr even on success, so temporarily allow the
+  # native process to finish and judge only its process exit code.
+  $savedPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = 'Continue'
+    & $Exe @Arguments 2>&1 | ForEach-Object { Write-Host $_ }
+    $exitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $savedPreference
+  }
+  if ($exitCode -ne 0) { throw "Command failed ($exitCode): $Exe" }
 }
 
 function Expand-ProjectList([string]$Value, [string]$ProjectDir) {
@@ -94,19 +104,12 @@ function Build-StaticProject([string]$ProjectPath, [string]$OutputName) {
   $objects = @()
   $common = @('/nologo','/c','/W3','/GS-')
   if ($Configuration -eq 'Release') { $common += @('/O2','/Oi','/Ot','/MT') } else { $common += @('/Od','/MTd','/Zi') }
-  # mbedTLS and libpeer contain modern declarations that the XDK's C89 frontend
-  # cannot parse.  Compile those archives through the same XDK C++ frontend;
-  # libpeer gets C allocation bridging from opennow_xdk_compat.h.
   if ($OutputName -eq 'mbedtls_opennow' -or $OutputName -eq 'peer') { $common += '/TP' }
   elseif (([string]$compile.CompileAs) -eq 'CompileAsC') { $common += '/TC' }
   foreach ($inc in $includes) { $common += "/I$inc" }
   foreach ($def in $defines) { $common += ('/D' + $def.Replace('"','\"')) }
   foreach ($fi in $forced) { $common += "/FI$fi" }
 
-  # This direct builder has no compiler-generated dependency database.  Use
-  # the newest project/include header as a conservative project dependency so
-  # a struct or inline change can never leave ABI-incompatible stale objects
-  # in the same archive.
   $dependencyTime = (Get-Item $ProjectPath).LastWriteTimeUtc
   $headerRoots = @($includes + ($sources | ForEach-Object { Split-Path $_ -Parent })) | Select-Object -Unique
   foreach ($headerRoot in $headerRoots) {
@@ -219,6 +222,7 @@ $xex = Join-Path $outDir 'default.xex'
 $xexConfig = Join-Path $here 'xex.xml'
 if (!(Test-Path $xexConfig)) { throw 'xdk\xex.xml is missing' }
 Invoke-Checked $imagexex @("/IN:$pe", "/OUT:$xex", "/CONFIG:$xexConfig")
+if (!(Test-Path $xex) -or (Get-Item $xex).Length -le 0) { throw 'imagexex returned success but did not produce a non-empty default.xex' }
 $ca = Join-Path $here 'cacert.pem'
 if (!(Test-Path $ca)) { throw 'xdk\cacert.pem is missing' }
 Copy-Item -Force $ca (Join-Path $outDir 'cacert.pem')
