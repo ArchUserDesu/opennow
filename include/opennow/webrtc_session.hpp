@@ -60,6 +60,14 @@ private:
     static DWORD WINAPI network_thread_entry(LPVOID);
     static DWORD WINAPI video_thread_entry(LPVOID);
     static DWORD WINAPI audio_thread_entry(LPVOID);
+    /* Xbox 360 does not automatically distribute child threads across its six
+       hardware threads.  Keep the realtime workers on separate hardware
+       threads so video decode cannot starve transport or audio. */
+    static HANDLE CreateThread(LPSECURITY_ATTRIBUTES attrs,SIZE_T stack,LPTHREAD_START_ROUTINE start,LPVOID arg,DWORD flags,LPDWORD tid){
+        HANDLE h=::CreateThread(attrs,stack,start,arg,flags,tid);
+        if(h){DWORD processor=5;if(start==&network_thread_entry)processor=1;else if(start==&video_thread_entry)processor=3;else if(start==&audio_thread_entry)processor=5;XSetThreadProcessor(h,processor);}
+        return h;
+    }
     bool start_workers();
     void stop_workers();
     void network_loop();
