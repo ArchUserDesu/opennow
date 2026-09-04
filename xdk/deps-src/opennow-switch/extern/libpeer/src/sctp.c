@@ -170,7 +170,7 @@ static int sctp_outgoing_data_cb(void* userdata, void* buf, size_t len, uint8_t 
     }
   }
 
-  const int written = dtls_srtp_write(sctp->dtls_srtp, (const uint8_t*)buf, len);
+  const int written = dtls_srtp_write(sctp->dtls_srtp, buf, len);
   if (written < 0)
     sctp_diag_log("dtls_write_failed ret=%d bytes=%zu", written, len);
   return written < 0 ? written : 0;
@@ -252,8 +252,7 @@ int sctp_outgoing_data(Sctp* sctp, char* buf, size_t len, SctpDataPpid ppid, uin
 
 void sctp_add_stream_mapping(Sctp* sctp, const char* label, uint16_t sid) {
   if (sctp->stream_count < SCTP_MAX_STREAMS) {
-    strncpy(sctp->stream_table[sctp->stream_count].label, label, sizeof(sctp->stream_table[sctp->stream_count].label) - 1);
-    sctp->stream_table[sctp->stream_count].label[sizeof(sctp->stream_table[sctp->stream_count].label) - 1] = '\0';
+    strncpy(sctp->stream_table[sctp->stream_count].label, label, sizeof(sctp->stream_table[sctp->stream_count].label));
     sctp->stream_table[sctp->stream_count].sid = sid;
     sctp->stream_count++;
   } else
@@ -269,13 +268,13 @@ void sctp_parse_data_channel_open(Sctp* sctp, uint16_t sid, char* data, size_t l
     uint16_t protocol_length = ntohs(*(uint16_t*)(data + 10));
 
     // Ensure we have enough data for the label and protocol
-    if (length < 12 + label_length + protocol_length || label_length >= 32)
+    if (length < 12 + label_length + protocol_length)
       return;
 
     char* label = (char*)(data + 12);
 
     // copy and null-terminate
-    char label_str[32];
+    char label_str[label_length + 1];
     memcpy(label_str, label, label_length);
     label_str[label_length] = '\0';
 
@@ -286,7 +285,7 @@ void sctp_parse_data_channel_open(Sctp* sctp, uint16_t sid, char* data, size_t l
     sctp_add_stream_mapping(sctp, label_str, sid);
     sctp_diag_log("dcep_open sid=%u label=%s", sid, label_str);
     char ack = DATA_CHANNEL_ACK;
-    sctp_outgoing_data(sctp, &ack, 1, (SctpDataPpid)DATA_CHANNEL_PPID_CONTROL, sid);
+    sctp_outgoing_data(sctp, &ack, 1, DATA_CHANNEL_PPID_CONTROL, sid);
   }
 }
 
@@ -408,7 +407,7 @@ void sctp_incoming_data(Sctp* sctp, char* buf, size_t len) {
         init_ack->number_of_inbound_streams = 0xffff;
         init_ack->initial_tsn = htonl(sctp->tsn);
 
-        SctpChunkParam* param = (SctpChunkParam*)init_ack->params;
+        SctpChunkParam* param = init_ack->param;
 
         param->type = htons(SCTP_PARAM_STATE_COOKIE);
         param->length = htons(8);
@@ -424,7 +423,7 @@ void sctp_incoming_data(Sctp* sctp, char* buf, size_t len) {
         SctpChunkParam* param = NULL;
         sctp->verification_tag = init_ack->initiate_tag;
         const int init_ack_length = ntohs(init_ack->common.length);
-        uint8_t* params = init_ack->params;
+        uint8_t* params = (uint8_t*)&init_ack->param[0];
         int offset = 0;
         while (offset + 4 <= init_ack_length - 20) {
           SctpChunkParam* candidate = (SctpChunkParam*)(params + offset);
