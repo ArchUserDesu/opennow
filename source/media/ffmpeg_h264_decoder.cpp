@@ -15,14 +15,31 @@ extern "C" {
 #include <cstring>
 #include <limits>
 
-extern "C" void opennow_ffmpeg_thread_log(const char* phase, int value0, int value1) {
-    ::opennow::log_message(::opennow::LogInfo, "ffmpeg-thread", "%s value0=%d value1=%d", phase ? phase : "<null>", value0, value1);
-}
+#if defined(OPENNOW_XDK)
+extern "C" int ptw32_processInitialize(void);
+#endif
 
 namespace opennow {
 namespace {
 
 extern "C" AVCodec ff_h264_decoder;
+
+bool ensure_xdk_pthreads_initialized() {
+#if defined(OPENNOW_XDK)
+    static bool initialized = false;
+    if (!initialized) {
+        ON_LOGI("xdk-pthread", "ptw32_processInitialize begin");
+        const int ok = ptw32_processInitialize();
+        ON_LOGI("xdk-pthread", "ptw32_processInitialize returned=%d", ok);
+        if (!ok) {
+            ON_LOGE("xdk-pthread", "pthread process initialization failed; refusing threaded FFmpeg startup");
+            return false;
+        }
+        initialized = true;
+    }
+#endif
+    return true;
+}
 
 void register_h264_decoder() {
     static bool registered = false;
@@ -44,7 +61,9 @@ public:
 
     bool open(int width, int height, int fps) {
         (void)fps;
-        free_frame(); free_context(); decoded_count_=0; register_h264_decoder();
+        free_frame(); free_context(); decoded_count_=0;
+        if (!ensure_xdk_pthreads_initialized()) return false;
+        register_h264_decoder();
         const AVCodec* codec = avcodec_find_decoder(AV_CODEC_ID_H264);
         ON_LOGI("video-decode", "FFmpeg H.264 open begin version=%u target=%dx%d fps=%d",(unsigned)LIBAVCODEC_VERSION_MAJOR,width,height,fps);
         if (!codec) { ON_LOGE("video-decode","avcodec_find_decoder H264 returned null"); return false; }
@@ -59,8 +78,8 @@ public:
         ctx_->flags2 |= AV_CODEC_FLAG2_FAST;
 #endif
         /* Xbox 360/XDK requires parallel H.264 decode to sustain the stream.
-           Use four slice workers; xb_thread.c owns the XDK-specific worker
-           completion barrier and logs its startup/execute transitions. */
+           The bundled pthreads-win32 Xbox port is initialized explicitly
+           before FFmpeg startup, so use FFmpeg 1.2's native 4-way slice pool. */
         const int requested_thread_count=4;
         const int requested_thread_type=FF_THREAD_SLICE;
         ctx_->thread_count=requested_thread_count;
