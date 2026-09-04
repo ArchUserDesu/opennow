@@ -54,19 +54,18 @@ public:
         ctx_->flags |= AV_CODEC_FLAG_LOW_DELAY;
         ctx_->flags2 |= AV_CODEC_FLAG2_FAST;
 #endif
-        /* xb_thread.c now uses FFmpeg 1.2's native pthread startup barrier
-           instead of suspending/retargeting newborn worker threads.  Keep
-           LOW_DELAY and use slice threading so decoding gains parallelism
-           without the frame-thread latency penalty. */
-        const int requested_thread_count=4;
-        const int requested_thread_type=FF_THREAD_SLICE;
+        /* Xbox 360/XDK: explicitly disable FFmpeg slice threading.  The XEX
+           repeatedly hangs inside avcodec_open2() when FFmpeg 1.2 enters the
+           pthread slice-worker startup path.  FFmpeg's own thread validation
+           disables active threading when thread_count == 1, so this keeps the
+           decoder out of xb_thread.c's worker startup deterministically. */
+        const int requested_thread_count=1;
+        const int requested_thread_type=0;
         ctx_->thread_count=requested_thread_count;
         ctx_->thread_type=requested_thread_type;
-        /* The latest runtime log showed normal deblocking pushing 720p decode
-           to 51-72 ms/frame and causing thousands of access-unit drops.  Keep
-           the dedicated decoder worker but restore the proven fast Xenon path. */
         ctx_->skip_loop_filter=AVDISCARD_ALL;
         ctx_->width=width; ctx_->height=height;
+        ON_LOGI("video-decode","XDK deterministic decoder mode single_thread=1 slice_threads=0 frame_threads=0 low_delay=1 fast=1 skip_loop_filter=%d",(int)ctx_->skip_loop_filter);
 #if LIBAVCODEC_VERSION_MAJOR < 55
         frame_=avcodec_alloc_frame();
 #else
@@ -76,19 +75,23 @@ public:
         if(!frame_){ON_LOGE("video-decode","frame allocation failed");free_context();return false;}
         ON_LOGI("video-decode","avcodec_open2 begin codec=%s requested_threads=%d requested_type=%d",codec->name?codec->name:"<unknown>",requested_thread_count,requested_thread_type);
         int open_rc=avcodec_open2(ctx_,codec,NULL);
+        ON_LOGI("video-decode","avcodec_open2 returned rc=%d",open_rc);
         if(open_rc<0){ON_LOGE("video-decode","avcodec_open2 failed rc=%d",open_rc);free_frame();free_context();return false;}
         const int caps=codec->capabilities;
         ON_LOGI("video-decode","H264 threading requested=%d type=%d actual=%d active=%d caps=0x%08x caps_slice=%d caps_frame=%d",requested_thread_count,requested_thread_type,ctx_->thread_count,ctx_->active_thread_type,(unsigned)caps,(caps&CODEC_CAP_SLICE_THREADS)?1:0,(caps&CODEC_CAP_FRAME_THREADS)?1:0);
+        if(ctx_->active_thread_type!=0){ON_LOGE("video-decode","unexpected active_thread_type=%d in forced single-thread XDK mode",ctx_->active_thread_type);free_frame();free_context();return false;}
         ON_LOGI("video-decode","FFmpeg H.264 open complete threads=%d type=%d active=%d skip_loop_filter=%d",ctx_->thread_count,ctx_->thread_type,ctx_->active_thread_type,(int)ctx_->skip_loop_filter);
         return true;
     }
 
     bool decode(const std::uint8_t* data,std::size_t size,VideoFrame& out) {
         if(!ctx_||!frame_||!data||size==0||size>static_cast<std::size_t>(std::numeric_limits<int>::max()))return false;
+        if(decoded_count_==0)ON_LOGI("video-decode","first H264 access unit decode begin bytes=%u",(unsigned)size);
         AVPacket packet;std::memset(&packet,0,sizeof(packet));packet.data=const_cast<std::uint8_t*>(data);packet.size=static_cast<int>(size);
 #if LIBAVCODEC_VERSION_MAJOR < 57
         int got_frame=0;
         const int rc=avcodec_decode_video2(ctx_,frame_,&got_frame,&packet);
+        if(decoded_count_==0)ON_LOGI("video-decode","first H264 access unit decode returned rc=%d got_frame=%d",rc,got_frame);
         if(rc<0||!got_frame){if(rc<0)ON_LOGE("video-decode","decode failed rc=%d packet_bytes=%u",rc,(unsigned)size);return false;}
 #else
         if(avcodec_send_packet(ctx_,&packet)<0)return false;
