@@ -5,7 +5,9 @@
 #include "xenon_platform.hpp"
 #include "input_protocol.hpp"
 #include "websocket.hpp"
+#include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <string>
 #include <vector>
 #if defined(OPENNOW_XDK)
@@ -33,6 +35,12 @@ public:
     int rtt_ms()const;
     void stop();
 private:
+    struct QueuedVideoUnit {
+        std::vector<std::uint8_t> data;
+        std::uint64_t enqueued_us;
+        bool idr;
+        QueuedVideoUnit():enqueued_us(0),idr(false){}
+    };
     SessionInfo info_; StreamConfig cfg_; XenonPlatform& platform_; WebSocket ws_;
     PeerConnection* pc_; VideoDecoder* decoder_; AudioDecoder* audio_decoder_;
     std::string peer_name_; int peer_id_,remote_peer_id_,ack_;
@@ -41,8 +49,10 @@ private:
     int remote_ice_count_,local_ice_count_;
     std::uint64_t last_hb_us_,last_peer_info_us_,last_input_hb_us_,channel_request_us_,input_activation_us_,manual_candidate_due_us_,last_pli_us_;
     std::uint16_t audio_last_sequence_;
-    std::vector<std::vector<std::uint8_t> > pending_video_units_;
-    std::uint64_t video_packets_,video_queue_drops_,video_present_drops_,audio_packets_,audio_missing_packets_,audio_recovered_packets_,audio_concealed_packets_,audio_resyncs_,audio_input_queue_drops_,audio_starvations_,decoded_frames_,video_decode_failures_,audio_decode_failures_,audio_output_failures_,input_packets_,mouse_packets_,key_packets_;
+    std::deque<QueuedVideoUnit> pending_video_units_;
+    std::vector<std::vector<std::uint8_t> > video_buffer_pool_;
+    std::vector<VideoFrame> video_frame_pool_;
+    std::uint64_t video_packets_,video_queue_drops_,video_present_drops_,video_buffer_allocations_,video_buffer_reuses_,video_queue_high_water_,video_queue_stale_events_,audio_packets_,audio_missing_packets_,audio_recovered_packets_,audio_concealed_packets_,audio_resyncs_,audio_input_queue_drops_,audio_starvations_,decoded_frames_,video_decode_failures_,audio_decode_failures_,audio_output_failures_,input_packets_,mouse_packets_,key_packets_;
 #if defined(OPENNOW_XDK)
     struct QueuedAudioPacket {
         std::vector<std::uint8_t> data;
@@ -76,6 +86,11 @@ private:
 #endif
     void lock_peer()const;
     void unlock_peer()const;
+    std::size_t max_video_queue_units()const;
+    void recycle_video_buffer(std::vector<std::uint8_t>&);
+    void clear_video_queue_locked();
+    void recycle_video_frame_locked(VideoFrame&);
+    bool acquire_video_frame_locked(VideoFrame&);
     void handle_signal(const std::string&);
     void send_peer_payload(void* json);
     void send_peer_info();
