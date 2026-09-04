@@ -13,9 +13,8 @@ struct GameVariant { std::string id,store,internal_title; bool selected; GameVar
 struct GameInfo { std::string id,title,publisher,image_url,launch_app_id,store,internal_title; std::vector<GameVariant> variants; bool in_library; GameInfo():in_library(false){} };
 struct IceServerInfo { std::string url,username,credential; IceServerInfo(){} IceServerInfo(const std::string&u,const std::string&n,const std::string&c):url(u),username(n),credential(c){} };
 struct SessionInfo { std::string session_id; int status,queue_position; bool app_patching; std::string session_token,server_ip,signaling_url,media_ip; int media_port; std::vector<IceServerInfo> ice_servers; SessionInfo():status(-1),queue_position(0),app_patching(false),media_port(0){} };
-// Match OpenNOW Vita's hardware-oriented defaults: native 960x544, 60 FPS,
-// with an 8 Mbps initial link ceiling.  On Xenon this cuts pixels/frame by
-// ~43% versus 720p while restoring motion cadence, which is a much better fit
-// for the single-threaded software H.264 decoder than 720p60.
-struct StreamConfig { int width,height,fps,bitrate_kbps; bool persist_game_settings; StreamConfig():width(960),height(544),fps(60),bitrate_kbps(8000),persist_game_settings(true){} };
+// Match OpenNOW Switch's Balanced defaults: 1280x720, 60 FPS, 12 Mbps.
+// The Xbox decoder remains software H.264; frame-threading work is intentionally
+// left to the dedicated FFmpeg follow-up experiment.
+struct StreamConfig { int width,height,fps,bitrate_kbps; bool persist_game_settings; StreamConfig():width(1280),height(720),fps(60),bitrate_kbps(12000),persist_game_settings(true){} };
 }
