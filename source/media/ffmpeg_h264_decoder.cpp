@@ -16,15 +16,39 @@ extern "C" {
 }
 
 #include <cerrno>
+#include <cstdarg>
+#include <cstdio>
 #include <cstring>
 #include <limits>
 
 #if defined(OPENNOW_XDK)
+#include <xtl.h>
 extern "C" int ptw32_processInitialize(void);
 #endif
 
 namespace opennow {
 namespace {
+
+std::uint64_t decoder_now_us() {
+#if defined(OPENNOW_XDK)
+    return static_cast<std::uint64_t>(GetTickCount()) * 1000ULL;
+#else
+    return 0;
+#endif
+}
+
+void diagnostic_av_log(void*, int level, const char* format, va_list args) {
+    if (level > AV_LOG_INFO) return;
+    char message[768];
+#if defined(OPENNOW_XDK)
+    _vsnprintf(message, sizeof(message) - 1, format, args);
+#else
+    std::vsnprintf(message, sizeof(message) - 1, format, args);
+#endif
+    message[sizeof(message) - 1] = '\0';
+    std::size_t n=std::strlen(message);while(n&&(message[n-1]=='\n'||message[n-1]=='\r'))message[--n]='\0';
+    log_message(level<=AV_LOG_ERROR?LogError:(level<=AV_LOG_WARNING?LogWarn:LogInfo),"ffmpeg", "%s",message);
+}
 
 extern "C" AVCodec ff_h264_decoder;
 
@@ -56,7 +80,7 @@ void register_h264_decoder() {
 
 class FFmpegH264Decoder : public VideoDecoder {
 public:
-    FFmpegH264Decoder() : ctx_(NULL), frame_(NULL), submitted_count_(0), decoded_count_(0), no_frame_count_(0), error_count_(0) {}
+    FFmpegH264Decoder() : ctx_(NULL), frame_(NULL), submitted_count_(0), decoded_count_(0), no_frame_count_(0), error_count_(0),codec_us_(0),copy_us_(0),codec_max_us_(0),copy_max_us_(0),over_16ms_(0),over_33ms_(0),over_50ms_(0),started_us_(0) {}
 private:
     FFmpegH264Decoder(const FFmpegH264Decoder&);
     FFmpegH264Decoder& operator=(const FFmpegH264Decoder&);
@@ -64,8 +88,9 @@ public:
     ~FFmpegH264Decoder() { free_frame(); free_context(); }
 
     bool open(int width, int height, int fps) {
-        free_frame(); free_context(); submitted_count_=0;decoded_count_=0;no_frame_count_=0;error_count_=0;
+        free_frame(); free_context(); submitted_count_=0;decoded_count_=0;no_frame_count_=0;error_count_=0;codec_us_=copy_us_=codec_max_us_=copy_max_us_=over_16ms_=over_33ms_=over_50ms_=0;started_us_=decoder_now_us();
         if (!ensure_xdk_pthreads_initialized()) return false;
+        av_log_set_level(AV_LOG_INFO);av_log_set_callback(&diagnostic_av_log);
         register_h264_decoder();
         const AVCodec* codec = avcodec_find_decoder(AV_CODEC_ID_H264);
         ON_LOGI("video-decode", "FFmpeg H.264 open begin version=%u major=%u target=%dx%d fps=%d",(unsigned)avcodec_version(),(unsigned)LIBAVCODEC_VERSION_MAJOR,width,height,fps);
@@ -95,7 +120,7 @@ public:
            two workers: one extra frame of decode latency and the smallest
            useful overlap on Xenon. LOW_DELAY must remain clear or FFmpeg 1.2
            will silently refuse FF_THREAD_FRAME. */
-        const int requested_thread_count=2;
+        const int requested_thread_count=3;
         const int requested_thread_type=FF_THREAD_FRAME;
 #else
         const int requested_thread_count=4;
@@ -144,13 +169,14 @@ public:
         if(!ctx_||!frame_||!data||size==0||size>static_cast<std::size_t>(std::numeric_limits<int>::max())){++error_count_;return VideoDecodeError;}
         ++submitted_count_;
         if(submitted_count_==1)ON_LOGI("video-decode","first H264 access unit decode begin bytes=%u",(unsigned)size);
-        AVPacket packet;std::memset(&packet,0,sizeof(packet));packet.data=const_cast<std::uint8_t*>(data);packet.size=static_cast<int>(size);
+        AVPacket packet;std::memset(&packet,0,sizeof(packet));packet.data=const_cast<std::uint8_t*>(data);packet.size=static_cast<int>(size);const std::uint64_t codec_began=decoder_now_us();
 #if LIBAVCODEC_VERSION_MAJOR < 57
         int got_frame=0;
         const int rc=avcodec_decode_video2(ctx_,frame_,&got_frame,&packet);
         if(submitted_count_==1)ON_LOGI("video-decode","first H264 access unit decode returned rc=%d got_frame=%d",rc,got_frame);
-        if(rc<0){++error_count_;ON_LOGE("video-decode","decode failed rc=%d packet_bytes=%u submitted=%llu errors=%llu",rc,(unsigned)size,submitted_count_,error_count_);return VideoDecodeError;}
-        if(!got_frame){++no_frame_count_;if(no_frame_count_<=4||no_frame_count_%300==0)ON_LOGI("video-decode","packet accepted without output submitted=%llu no_frame=%llu frames=%llu packet_bytes=%u",submitted_count_,no_frame_count_,decoded_count_,(unsigned)size);return VideoDecodeNoFrame;}
+        const std::uint64_t codec_done=decoder_now_us();const std::uint64_t codec_delta=codec_done-codec_began;codec_us_+=codec_delta;if(codec_delta>codec_max_us_)codec_max_us_=codec_delta;if(codec_delta>=16000ULL)++over_16ms_;if(codec_delta>=33000ULL)++over_33ms_;if(codec_delta>=50000ULL)++over_50ms_;
+        if(rc<0){++error_count_;ON_LOGE("video-decode","decode failed rc=%d codec_ms=%llu packet_bytes=%u submitted=%llu errors=%llu",rc,codec_delta/1000ULL,(unsigned)size,submitted_count_,error_count_);return VideoDecodeError;}
+        if(!got_frame){++no_frame_count_;if(no_frame_count_<=4||no_frame_count_%300==0)ON_LOGI("video-decode","packet accepted without output submitted=%llu no_frame=%llu frames=%llu codec_ms=%llu packet_bytes=%u",submitted_count_,no_frame_count_,decoded_count_,codec_delta/1000ULL,(unsigned)size);return VideoDecodeNoFrame;}
 #else
         const int send_rc=avcodec_send_packet(ctx_,&packet);
         if(send_rc<0){++error_count_;ON_LOGE("video-decode","send packet failed rc=%d packet_bytes=%u submitted=%llu errors=%llu",send_rc,(unsigned)size,submitted_count_,error_count_);return VideoDecodeError;}
@@ -158,7 +184,7 @@ public:
         if(rc==AVERROR(EAGAIN)||rc==AVERROR_EOF){++no_frame_count_;if(no_frame_count_<=4||no_frame_count_%300==0)ON_LOGI("video-decode","packet accepted without output submitted=%llu no_frame=%llu frames=%llu packet_bytes=%u",submitted_count_,no_frame_count_,decoded_count_,(unsigned)size);return VideoDecodeNoFrame;}
         if(rc<0){++error_count_;ON_LOGE("video-decode","receive frame failed rc=%d packet_bytes=%u submitted=%llu errors=%llu",rc,(unsigned)size,submitted_count_,error_count_);return VideoDecodeError;}
 #endif
-        ++decoded_count_; out.width=frame_->width;out.height=frame_->height;out.pts=frame_->pts;
+        ++decoded_count_; out.width=frame_->width;out.height=frame_->height;out.pts=frame_->pts;const std::uint64_t copy_began=decoder_now_us();
         if(decoded_count_<=4||decoded_count_%300==0){
             ON_LOGI("video-frame","decoded=%llu submitted=%llu no_frame=%llu errors=%llu coded_bytes=%u actual=%dx%d format=%d linesize=%d,%d,%d range=%s",decoded_count_,submitted_count_,no_frame_count_,error_count_,(unsigned)size,frame_->width,frame_->height,frame_->format,frame_->linesize[0],frame_->linesize[1],frame_->linesize[2],frame_->format==AV_PIX_FMT_YUVJ420P?"full":"limited");
         }
@@ -171,7 +197,7 @@ public:
                 out.plane[plane].resize(static_cast<std::size_t>(plane_width)*static_cast<std::size_t>(plane_height));
                 for(int y=0;y<plane_height;++y)std::memcpy(&out.plane[plane][0]+static_cast<std::size_t>(y)*plane_width,frame_->data[plane]+static_cast<std::size_t>(y)*frame_->linesize[plane],static_cast<std::size_t>(plane_width));
             }
-            return VideoDecodeFrame;
+            const std::uint64_t d=decoder_now_us()-copy_began;copy_us_+=d;if(d>copy_max_us_)copy_max_us_=d;log_summary();return VideoDecodeFrame;
         }
         if(frame_->format==AV_PIX_FMT_NV12){
             out.format=PixelFormat_NV12;out.stride[0]=out.width;out.stride[1]=out.width;out.stride[2]=0;
@@ -179,13 +205,14 @@ public:
             out.plane[1].resize(static_cast<std::size_t>(out.width)*static_cast<std::size_t>((out.height+1)/2));out.plane[2].clear();
             for(int y=0;y<out.height;++y)std::memcpy(&out.plane[0][0]+static_cast<std::size_t>(y)*out.width,frame_->data[0]+static_cast<std::size_t>(y)*frame_->linesize[0],static_cast<std::size_t>(out.width));
             for(int y=0;y<(out.height+1)/2;++y)std::memcpy(&out.plane[1][0]+static_cast<std::size_t>(y)*out.width,frame_->data[1]+static_cast<std::size_t>(y)*frame_->linesize[1],static_cast<std::size_t>(out.width));
-            return VideoDecodeFrame;
+            const std::uint64_t d=decoder_now_us()-copy_began;copy_us_+=d;if(d>copy_max_us_)copy_max_us_=d;log_summary();return VideoDecodeFrame;
         }
         ++error_count_;ON_LOGE("video-decode","unsupported pixel format=%d size=%dx%d submitted=%llu errors=%llu",frame_->format,out.width,out.height,submitted_count_,error_count_);return VideoDecodeError;
     }
 
     void flush(){if(ctx_){ON_LOGI("video-decode","flush submitted=%llu frames=%llu no_frame=%llu errors=%llu",submitted_count_,decoded_count_,no_frame_count_,error_count_);avcodec_flush_buffers(ctx_);}}
 private:
+    void log_summary(){if(decoded_count_==1||decoded_count_%60==0){const std::uint64_t elapsed=decoder_now_us()-started_us_;ON_LOGI("video-codec-perf","frames=%llu submitted=%llu no_frame=%llu errors=%llu elapsed_ms=%llu output_fps_x10=%llu codec_avg_ms_x10=%llu codec_max_ms=%llu copy_avg_ms_x10=%llu copy_max_ms=%llu codec_ge16=%llu ge33=%llu ge50=%llu",decoded_count_,submitted_count_,no_frame_count_,error_count_,elapsed/1000ULL,elapsed?decoded_count_*10000000ULL/elapsed:0,submitted_count_?codec_us_*10ULL/submitted_count_/1000ULL:0,codec_max_us_/1000ULL,decoded_count_?copy_us_*10ULL/decoded_count_/1000ULL:0,copy_max_us_/1000ULL,over_16ms_,over_33ms_,over_50ms_);}}
     void free_frame(){if(!frame_)return;
 #if LIBAVCODEC_VERSION_MAJOR < 55
         av_free(frame_);frame_=NULL;
@@ -200,7 +227,7 @@ private:
         avcodec_free_context(&ctx_);
 #endif
     }
-    AVCodecContext* ctx_;AVFrame* frame_;unsigned long long submitted_count_,decoded_count_,no_frame_count_,error_count_;
+    AVCodecContext* ctx_;AVFrame* frame_;unsigned long long submitted_count_,decoded_count_,no_frame_count_,error_count_,codec_us_,copy_us_,codec_max_us_,copy_max_us_,over_16ms_,over_33ms_,over_50ms_,started_us_;
 };
 }
 VideoDecoder* make_ffmpeg_h264_decoder(){return new FFmpegH264Decoder();}

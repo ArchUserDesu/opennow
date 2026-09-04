@@ -347,7 +347,11 @@ static attribute_align_arg void *frame_worker_thread(void *arg)
     AVCodecContext *avctx = p->avctx;
     const AVCodec *codec = avctx->codec;
 
-    av_log(avctx, AV_LOG_INFO, "Xbox frame-worker entered i=%d\n", p->thread_index);
+    /* Assign affinity from inside the live pthread. Retargeting a suspended
+       newborn pthread previously deadlocked FFmpeg startup. */
+    XSetThreadProcessor(GetCurrentThread(), (DWORD)(p->thread_index * 2));
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_NORMAL);
+    av_log(avctx, AV_LOG_INFO, "Xbox frame-worker entered i=%d processor=%d priority=normal\n", p->thread_index, p->thread_index * 2);
     pthread_mutex_lock(&p->mutex);
     while (1) {
         int i;

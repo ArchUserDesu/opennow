@@ -52,7 +52,7 @@ private:
     std::deque<QueuedVideoUnit> pending_video_units_;
     std::vector<std::vector<std::uint8_t> > video_buffer_pool_;
     std::vector<VideoFrame> video_frame_pool_;
-    std::uint64_t video_packets_,video_queue_drops_,video_present_drops_,video_buffer_allocations_,video_buffer_reuses_,video_queue_high_water_,video_queue_stale_events_,audio_packets_,audio_missing_packets_,audio_recovered_packets_,audio_concealed_packets_,audio_resyncs_,audio_input_queue_drops_,audio_starvations_,decoded_frames_,video_decode_failures_,audio_decode_failures_,audio_output_failures_,input_packets_,mouse_packets_,key_packets_;
+    std::uint64_t video_packets_,video_bytes_,video_queue_drops_,video_present_drops_,video_buffer_allocations_,video_buffer_reuses_,video_queue_high_water_,video_queue_stale_events_,decoded_frames_,video_decode_no_frame_,video_decode_failures_,presented_frames_,decode_time_us_,decode_time_max_us_,queue_wait_time_us_,queue_wait_max_us_,video_first_packet_us_,video_last_packet_us_,video_last_decode_us_,video_last_present_us_,diag_last_us_,diag_prev_packets_,diag_prev_bytes_,diag_prev_decoded_,diag_prev_no_frame_,diag_prev_queue_drops_,diag_prev_present_drops_,diag_prev_presented_,audio_packets_,audio_missing_packets_,audio_recovered_packets_,audio_concealed_packets_,audio_resyncs_,audio_input_queue_drops_,audio_starvations_,audio_decode_failures_,audio_output_failures_,input_packets_,mouse_packets_,key_packets_;
 #if defined(OPENNOW_XDK)
     struct QueuedAudioPacket {
         std::vector<std::uint8_t> data;

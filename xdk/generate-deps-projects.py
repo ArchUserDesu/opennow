@@ -83,7 +83,7 @@ def main():
     # it with the C++ frontend while preserving C allocation semantics through
     # opennow_xdk_compat.h.
     peer_sources=files(peer,['*.c'],['peer_signaling.c'])
-    emit('peer',proj/'peer.vcxproj',peer_sources,[peer,sw/'include',cjson,mbed/'include',srtp/'include',srtp/'crypto'/'include'],['CONFIG_USE_USRSCTP=0','DISABLE_PEER_SIGNALING=1','CONFIG_IPV6=0','OPENNOW_PEER_CPP=1','MBEDTLS_CONFIG_FILE=\"mbedtls_xdk_config.h\"'],compat)
+    emit('peer',proj/'peer.vcxproj',peer_sources,[peer,sw/'include',cjson,mbed/'include',srtp/'include',srtp/'crypto'/'include'],['CONFIG_USE_USRSCTP=0','DISABLE_PEER_SIGNALING=1','CONFIG_IPV6=0','LOG_REDIRECT=1','OPENNOW_PEER_CPP=1','MBEDTLS_CONFIG_FILE=\"mbedtls_xdk_config.h\"'],compat)
     print('Generated projects in', proj)
     print('FFmpeg projects are already provided by deps-src/xbmc360/libraries/ffmpeg/vcproj.')
 
