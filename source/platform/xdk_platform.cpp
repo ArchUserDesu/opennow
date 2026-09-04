@@ -75,7 +75,7 @@ public:
     STDMETHOD_(void, OnStreamEnd)() {}
     STDMETHOD_(void, OnBufferStart)(void*) {}
     STDMETHOD_(void, OnBufferEnd)(void* context) { AudioSlot* s = static_cast<AudioSlot*>(context); if (s) InterlockedExchange(&s->in_use, 0); InterlockedIncrement(&g_audio_buffers_ended); }
-    STDMETHOD_(void, OnLoopEnd)() {}
+    STDMETHOD_(void, OnLoopEnd)(void*) {}
     STDMETHOD_(void, OnVoiceError)(void* context, HRESULT) { AudioSlot* s = static_cast<AudioSlot*>(context); if (s) InterlockedExchange(&s->in_use, 0); }
 };
 VoiceCallback g_voice_callback;
@@ -219,7 +219,7 @@ const unsigned char* glyph5x7(char c) {
     static const unsigned char Y[7]={17,17,10,4,4,4,4},Z[7]={31,1,2,4,8,16,31};
     static const unsigned char N0[7]={14,17,19,21,25,17,14},N1[7]={4,12,4,4,4,4,14},N2[7]={14,17,1,2,4,8,31};
     static const unsigned char N3[7]={30,1,1,14,1,1,30},N4[7]={2,6,10,18,31,2,2},N5[7]={31,16,16,30,1,1,30};
-    static const unsigned char N6[7]={14,16,16,30,17,17,14},N7[7]={31,1,2,4,8,8,8},N8[7]={14,17,17,14,17,17,14},N9[7]={17,17,17,15,1,1,14};
+    static const unsigned char N6[7]={14,16,16,30,17,17,14},N7[7]={31,1,2,4,8,8,8},N8[7]={14,17,17,14,17,17,14},N9[7]={14,17,17,15,1,1,14};
     static const unsigned char dot[7]={0,0,0,0,0,12,12},colon[7]={0,12,12,0,12,12,0},dash[7]={0,0,0,31,0,0,0};
     static const unsigned char slash[7]={1,2,2,4,8,8,16},backslash[7]={16,8,8,4,2,2,1},under[7]={0,0,0,0,0,0,31};
     static const unsigned char lbr[7]={14,8,8,8,8,8,14},rbr[7]={14,2,2,2,2,2,14},lp[7]={2,4,8,8,8,4,2},rp[7]={8,4,2,2,2,4,8};
