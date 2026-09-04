@@ -37,7 +37,7 @@ void move_frame(VideoFrame&dst,VideoFrame&src){dst.width=src.width;dst.height=sr
 }
 
 WebRtcSession::WebRtcSession(const SessionInfo&i,const StreamConfig&c,XenonPlatform&p)
-:info_(i),cfg_(c),platform_(p),pc_(NULL),decoder_(NULL),audio_decoder_(NULL),peer_name_(make_peer()),peer_id_(0),remote_peer_id_(1),ack_(0),running_(false),signaling_open_(false),media_established_(false),remote_set_(false),answer_sent_(false),offer_seen_(false),sctp_open_(false),channel_requested_(false),input_ready_(false),manual_candidate_added_(false),waiting_video_keyframe_(false),audio_have_sequence_(false),input_protocol_(2),gamepad_seq_(1),state_("idle"),remote_ice_count_(0),local_ice_count_(0),last_hb_us_(0),last_peer_info_us_(0),last_input_hb_us_(0),channel_request_us_(0),input_activation_us_(0),manual_candidate_due_us_(0),last_pli_us_(0),audio_last_sequence_(0),video_packets_(0),video_queue_drops_(0),video_present_drops_(0),audio_packets_(0),audio_missing_packets_(0),audio_recovered_packets_(0),audio_concealed_packets_(0),audio_resyncs_(0),audio_input_queue_drops_(0),audio_starvations_(0),decoded_frames_(0),video_decode_failures_(0),audio_decode_failures_(0),audio_output_failures_(0),input_packets_(0),mouse_packets_(0),key_packets_(0)
+:info_(i),cfg_(c),platform_(p),pc_(NULL),decoder_(NULL),audio_decoder_(NULL),peer_name_(make_peer()),peer_id_(0),remote_peer_id_(1),ack_(0),running_(false),signaling_open_(false),media_established_(false),remote_set_(false),answer_sent_(false),offer_seen_(false),sctp_open_(false),channel_requested_(false),input_ready_(false),manual_candidate_added_(false),waiting_video_keyframe_(false),audio_have_sequence_(false),input_protocol_(2),gamepad_seq_(1),state_("idle"),remote_ice_count_(0),local_ice_count_(0),last_hb_us_(0),last_peer_info_us_(0),last_input_hb_us_(0),channel_request_us_(0),input_activation_us_(0),manual_candidate_due_us_(0),last_pli_us_(0),audio_last_sequence_(0),video_packets_(0),video_queue_drops_(0),video_present_drops_(0),video_buffer_allocations_(0),video_buffer_reuses_(0),video_queue_high_water_(0),video_queue_stale_events_(0),audio_packets_(0),audio_missing_packets_(0),audio_recovered_packets_(0),audio_concealed_packets_(0),audio_resyncs_(0),audio_input_queue_drops_(0),audio_starvations_(0),decoded_frames_(0),video_decode_failures_(0),audio_decode_failures_(0),audio_output_failures_(0),input_packets_(0),mouse_packets_(0),key_packets_(0)
 #if defined(OPENNOW_XDK)
 ,network_thread_(NULL),video_thread_(NULL),audio_thread_(NULL),video_event_(NULL),audio_event_(NULL),workers_stop_(1),keyframe_pending_(0),ready_video_available_(false)
 #endif
@@ -62,6 +62,11 @@ void WebRtcSession::unlock_peer()const{
     LeaveCriticalSection(&peer_cs_);
 #endif
 }
+std::size_t WebRtcSession::max_video_queue_units()const{int fps=cfg_.fps>0?cfg_.fps:1;int units=(fps+7)/8;if(units<2)units=2;if(units>8)units=8;return(std::size_t)units;}
+void WebRtcSession::recycle_video_buffer(std::vector<std::uint8_t>&buffer){const std::size_t max_reusable=2*1024*1024;if(buffer.capacity()>max_reusable||video_buffer_pool_.size()>=8)return;buffer.clear();video_buffer_pool_.push_back(std::vector<std::uint8_t>());video_buffer_pool_.back().swap(buffer);}
+void WebRtcSession::clear_video_queue_locked(){while(!pending_video_units_.empty()){std::vector<std::uint8_t>buffer;buffer.swap(pending_video_units_.front().data);pending_video_units_.pop_front();recycle_video_buffer(buffer);}}
+void WebRtcSession::recycle_video_frame_locked(VideoFrame&frame){if(video_frame_pool_.size()>=4)return;video_frame_pool_.push_back(VideoFrame());move_frame(video_frame_pool_.back(),frame);}
+bool WebRtcSession::acquire_video_frame_locked(VideoFrame&frame){if(video_frame_pool_.empty())return false;move_frame(frame,video_frame_pool_.back());video_frame_pool_.pop_back();return true;}
 
 #if defined(OPENNOW_XDK)
 DWORD WINAPI WebRtcSession::network_thread_entry(LPVOID p){WebRtcSession*s=(WebRtcSession*)p;if(s)s->network_loop();return 0;}
@@ -78,7 +83,7 @@ bool WebRtcSession::start_workers(){
     SetThreadPriority(network_thread_,THREAD_PRIORITY_HIGHEST);
     SetThreadPriority(audio_thread_,THREAD_PRIORITY_HIGHEST);
     SetThreadPriority(video_thread_,THREAD_PRIORITY_ABOVE_NORMAL);
-    ON_LOGI("webrtc-worker","workers started transport=highest audio=highest video=above-normal audio_jitter_packets=4 video_queue_max=3");
+    ON_LOGI("webrtc-worker","workers started transport=highest audio=highest video=above-normal audio_jitter_packets=4 video_queue_max=%u video_queue_age_ms=67 buffer_pool=8 frame_pool=4",(unsigned)max_video_queue_units());
     return true;
 }
 void WebRtcSession::stop_workers(){
@@ -106,15 +111,17 @@ void WebRtcSession::network_loop(){
 }
 void WebRtcSession::video_loop(){
     while(InterlockedCompareExchange(&workers_stop_,0,0)==0){
-        std::vector<std::uint8_t>data;
-        EnterCriticalSection(&video_cs_);if(!pending_video_units_.empty()){data.swap(pending_video_units_[0]);pending_video_units_.erase(pending_video_units_.begin());}LeaveCriticalSection(&video_cs_);
-        if(data.empty()){WaitForSingleObject(video_event_,2);continue;}
-        const std::uint64_t began=now_us();VideoFrame f;
-        if(decoder_&&decoder_->decode(&data[0],data.size(),f)){
+        QueuedVideoUnit unit;
+        EnterCriticalSection(&video_cs_);if(!pending_video_units_.empty()){unit.data.swap(pending_video_units_.front().data);unit.enqueued_us=pending_video_units_.front().enqueued_us;unit.idr=pending_video_units_.front().idr;pending_video_units_.pop_front();}LeaveCriticalSection(&video_cs_);
+        if(unit.data.empty()){WaitForSingleObject(video_event_,2);continue;}
+        VideoFrame f;EnterCriticalSection(&frame_cs_);acquire_video_frame_locked(f);LeaveCriticalSection(&frame_cs_);
+        const std::uint64_t began=now_us();const std::uint64_t queue_wait_ms=unit.enqueued_us&&began>=unit.enqueued_us?(began-unit.enqueued_us)/1000ULL:0;
+        if(decoder_&&decoder_->decode(&unit.data[0],unit.data.size(),f)){
             const std::uint64_t done=now_us();++decoded_frames_;
-            EnterCriticalSection(&frame_cs_);if(ready_video_available_)++video_present_drops_;move_frame(ready_video_frame_,f);ready_video_available_=true;LeaveCriticalSection(&frame_cs_);
-            if(decoded_frames_==1||decoded_frames_%120==0)ON_LOGI("video-perf","decoded frame=%llu decode_ms=%llu compressed=%u present_drops=%llu",decoded_frames_,(done-began)/1000ULL,(unsigned)data.size(),video_present_drops_);
-        }else{++video_decode_failures_;if(!contains_idr(&data[0],data.size()))request_keyframe_async();}
+            EnterCriticalSection(&frame_cs_);if(ready_video_available_){++video_present_drops_;recycle_video_frame_locked(ready_video_frame_);}move_frame(ready_video_frame_,f);ready_video_available_=true;LeaveCriticalSection(&frame_cs_);
+            if(decoded_frames_==1||decoded_frames_%120==0)ON_LOGI("video-perf","decoded frame=%llu decode_ms=%llu queue_wait_ms=%llu compressed=%u present_drops=%llu buffer_reuse=%llu/%llu",decoded_frames_,(done-began)/1000ULL,queue_wait_ms,(unsigned)unit.data.size(),video_present_drops_,video_buffer_reuses_,video_buffer_allocations_);
+        }else{++video_decode_failures_;EnterCriticalSection(&frame_cs_);recycle_video_frame_locked(f);LeaveCriticalSection(&frame_cs_);if(!unit.idr)request_keyframe_async();}
+        EnterCriticalSection(&video_cs_);recycle_video_buffer(unit.data);LeaveCriticalSection(&video_cs_);
     }
 }
 void WebRtcSession::audio_loop(){
@@ -160,16 +167,16 @@ bool WebRtcSession::start(){
 
 void WebRtcSession::stop(){
     if(!pc_&&!running_&&!decoder_&&!audio_decoder_)return;
-    ON_LOGI("webrtc","stop begin state=%s video_units=%llu decoded=%llu video_failures=%llu video_queue_drops=%llu video_present_drops=%llu audio_packets=%llu audio_missing=%llu audio_recovered=%llu audio_plc=%llu audio_resyncs=%llu audio_input_drops=%llu audio_starvations=%llu audio_decode_failures=%llu audio_output_failures=%llu gamepad=%llu mouse=%llu keys=%llu",state_.c_str(),video_packets_,decoded_frames_,video_decode_failures_,video_queue_drops_,video_present_drops_,audio_packets_,audio_missing_packets_,audio_recovered_packets_,audio_concealed_packets_,audio_resyncs_,audio_input_queue_drops_,audio_starvations_,audio_decode_failures_,audio_output_failures_,input_packets_,mouse_packets_,key_packets_);
+    ON_LOGI("webrtc","stop begin state=%s video_units=%llu decoded=%llu video_failures=%llu video_queue_drops=%llu video_present_drops=%llu video_buffer_alloc=%llu video_buffer_reuse=%llu video_queue_high=%llu video_queue_stale=%llu audio_packets=%llu audio_missing=%llu audio_recovered=%llu audio_plc=%llu audio_resyncs=%llu audio_input_drops=%llu audio_starvations=%llu audio_decode_failures=%llu audio_output_failures=%llu gamepad=%llu mouse=%llu keys=%llu",state_.c_str(),video_packets_,decoded_frames_,video_decode_failures_,video_queue_drops_,video_present_drops_,video_buffer_allocations_,video_buffer_reuses_,video_queue_high_water_,video_queue_stale_events_,audio_packets_,audio_missing_packets_,audio_recovered_packets_,audio_concealed_packets_,audio_resyncs_,audio_input_queue_drops_,audio_starvations_,audio_decode_failures_,audio_output_failures_,input_packets_,mouse_packets_,key_packets_);
     running_=false;signaling_open_=false;ws_.close();
 #if defined(OPENNOW_XDK)
     stop_workers();
 #endif
     lock_peer();if(pc_){peer_connection_close(pc_);peer_connection_destroy(pc_);pc_=NULL;}unlock_peer();peer_deinit();
 #if defined(OPENNOW_XDK)
-    EnterCriticalSection(&video_cs_);pending_video_units_.clear();LeaveCriticalSection(&video_cs_);EnterCriticalSection(&audio_cs_);pending_audio_packets_.clear();LeaveCriticalSection(&audio_cs_);EnterCriticalSection(&frame_cs_);ready_video_available_=false;for(int i=0;i<3;++i)ready_video_frame_.plane[i].clear();LeaveCriticalSection(&frame_cs_);
+    EnterCriticalSection(&video_cs_);clear_video_queue_locked();video_buffer_pool_.clear();LeaveCriticalSection(&video_cs_);EnterCriticalSection(&audio_cs_);pending_audio_packets_.clear();LeaveCriticalSection(&audio_cs_);EnterCriticalSection(&frame_cs_);ready_video_available_=false;for(int i=0;i<3;++i)ready_video_frame_.plane[i].clear();video_frame_pool_.clear();LeaveCriticalSection(&frame_cs_);
 #else
-    pending_video_units_.clear();
+    clear_video_queue_locked();video_buffer_pool_.clear();video_frame_pool_.clear();
 #endif
     if(decoder_)decoder_->flush();delete decoder_;decoder_=NULL;if(audio_decoder_)audio_decoder_->reset();delete audio_decoder_;audio_decoder_=NULL;state_="stopped";ON_LOGI("webrtc","stop complete");
 }
@@ -228,14 +235,14 @@ void WebRtcSession::on_data(char*msg,size_t len,uint16_t sid){if(!msg||len<2)ret
 void WebRtcSession::on_open(){sctp_open_=true;ON_LOGI("datachannel","SCTP channel opened");}
 void WebRtcSession::on_close(){ON_LOGW("datachannel","SCTP channel closed");sctp_open_=false;channel_requested_=false;input_ready_=false;channel_request_us_=now_us();}
 
-void WebRtcSession::request_keyframe_async(){
+void WebRtcSession::request_keyframe_async(){uint64_t n=now_us();if(last_pli_us_&&n-last_pli_us_<1500000ULL)return;last_pli_us_=n;
 #if defined(OPENNOW_XDK)
     InterlockedExchange(&keyframe_pending_,1);
 #else
-    if(pc_&&now_us()-last_pli_us_>500000ULL){last_pli_us_=now_us();peer_connection_request_video_keyframe(pc_);}
+    if(pc_)peer_connection_request_video_keyframe(pc_);
 #endif
 }
-void WebRtcSession::on_video(const PeerVideoPacket&p){if(!decoder_||!p.data||!p.size)return;++video_packets_;const bool idr=contains_idr(p.data,p.size);
+void WebRtcSession::on_video(const PeerVideoPacket&p){if(!decoder_||!p.data||!p.size)return;++video_packets_;const bool idr=contains_idr(p.data,p.size);const std::size_t max_unit=2*1024*1024;if(p.size>max_unit){++video_queue_drops_;ON_LOGW("video-queue","oversize access unit dropped bytes=%u limit=%u",(unsigned)p.size,(unsigned)max_unit);request_keyframe_async();return;}const std::uint64_t queued_at=now_us();
 #if defined(OPENNOW_XDK)
     EnterCriticalSection(&video_cs_);
 #endif
@@ -244,13 +251,14 @@ void WebRtcSession::on_video(const PeerVideoPacket&p){if(!decoder_||!p.data||!p.
         LeaveCriticalSection(&video_cs_);
 #endif
         return;}
-    if(idr&&!pending_video_units_.empty()){video_queue_drops_+=pending_video_units_.size();pending_video_units_.clear();}
-    if(pending_video_units_.size()>=3){video_queue_drops_+=pending_video_units_.size();pending_video_units_.clear();waiting_video_keyframe_=!idr;request_keyframe_async();static unsigned backlog_events=0;++backlog_events;if(backlog_events<=5||backlog_events%50==0)ON_LOGW("video-queue","bounded backlog event=%u dropped_total=%llu current_idr=%d waiting_for_idr=%d",backlog_events,video_queue_drops_,idr?1:0,waiting_video_keyframe_?1:0);if(waiting_video_keyframe_){++video_queue_drops_;
+    if(idr&&!pending_video_units_.empty()){video_queue_drops_+=pending_video_units_.size();clear_video_queue_locked();}
+    const std::size_t max_queued=max_video_queue_units();const std::uint64_t oldest_age_us=!pending_video_units_.empty()&&queued_at>=pending_video_units_.front().enqueued_us?queued_at-pending_video_units_.front().enqueued_us:0;const bool stale=oldest_age_us>=67000ULL;const bool full=pending_video_units_.size()>=max_queued;
+    if(stale||full){video_queue_drops_+=pending_video_units_.size();clear_video_queue_locked();if(stale)++video_queue_stale_events_;waiting_video_keyframe_=!idr;request_keyframe_async();static unsigned backlog_events=0;++backlog_events;if(backlog_events<=8||backlog_events%50==0)ON_LOGW("video-queue","bounded backlog event=%u reason=%s dropped_total=%llu oldest_ms=%llu max_units=%u current_idr=%d waiting_for_idr=%d",backlog_events,stale?"stale":"count",video_queue_drops_,oldest_age_us/1000ULL,(unsigned)max_queued,idr?1:0,waiting_video_keyframe_?1:0);if(waiting_video_keyframe_){++video_queue_drops_;
 #if defined(OPENNOW_XDK)
         LeaveCriticalSection(&video_cs_);
 #endif
         return;}}
-    if(idr)waiting_video_keyframe_=false;pending_video_units_.push_back(std::vector<std::uint8_t>(p.data,p.data+p.size));
+    if(idr)waiting_video_keyframe_=false;std::vector<std::uint8_t>buffer;if(!video_buffer_pool_.empty()){buffer.swap(video_buffer_pool_.back());video_buffer_pool_.pop_back();++video_buffer_reuses_;}else ++video_buffer_allocations_;buffer.resize(p.size);std::memcpy(&buffer[0],p.data,p.size);pending_video_units_.push_back(QueuedVideoUnit());QueuedVideoUnit&unit=pending_video_units_.back();unit.data.swap(buffer);unit.enqueued_us=queued_at;unit.idr=idr;if(pending_video_units_.size()>video_queue_high_water_)video_queue_high_water_=pending_video_units_.size();
 #if defined(OPENNOW_XDK)
     LeaveCriticalSection(&video_cs_);SetEvent(video_event_);
 #endif
@@ -259,12 +267,12 @@ void WebRtcSession::decode_pending_video(){
 #if defined(OPENNOW_XDK)
     return;
 #else
-    if(!decoder_||pending_video_units_.empty())return;std::vector<std::uint8_t>data;data.swap(pending_video_units_[0]);pending_video_units_.erase(pending_video_units_.begin());const std::uint64_t began=now_us();VideoFrame f;if(decoder_->decode(&data[0],data.size(),f)){const std::uint64_t decoded_at=now_us();++decoded_frames_;const bool shown=platform_.present(f);const std::uint64_t done=now_us();if(decoded_frames_==1||decoded_frames_%120==0)ON_LOGI("video-perf","frame=%llu decode_ms=%llu present_ms=%llu compressed=%u pending=%u shown=%d",decoded_frames_,(decoded_at-began)/1000ULL,(done-decoded_at)/1000ULL,(unsigned)data.size(),(unsigned)pending_video_units_.size(),shown?1:0);}else{++video_decode_failures_;request_keyframe_async();}
+    if(!decoder_||pending_video_units_.empty())return;QueuedVideoUnit unit;unit.data.swap(pending_video_units_.front().data);unit.enqueued_us=pending_video_units_.front().enqueued_us;unit.idr=pending_video_units_.front().idr;pending_video_units_.pop_front();const std::uint64_t began=now_us();VideoFrame f;if(decoder_->decode(&unit.data[0],unit.data.size(),f)){const std::uint64_t decoded_at=now_us();++decoded_frames_;const bool shown=platform_.present(f);const std::uint64_t done=now_us();if(decoded_frames_==1||decoded_frames_%120==0)ON_LOGI("video-perf","frame=%llu decode_ms=%llu present_ms=%llu compressed=%u pending=%u shown=%d",decoded_frames_,(decoded_at-began)/1000ULL,(done-decoded_at)/1000ULL,(unsigned)unit.data.size(),(unsigned)pending_video_units_.size(),shown?1:0);}else{++video_decode_failures_;request_keyframe_async();}recycle_video_buffer(unit.data);
 #endif
 }
 void WebRtcSession::present_ready_video(){
 #if defined(OPENNOW_XDK)
-    VideoFrame f;bool have=false;EnterCriticalSection(&frame_cs_);if(ready_video_available_){move_frame(f,ready_video_frame_);ready_video_available_=false;have=true;}LeaveCriticalSection(&frame_cs_);if(!have)return;const std::uint64_t began=now_us();bool shown=platform_.present(f);const std::uint64_t done=now_us();if(decoded_frames_==1||decoded_frames_%120==0)ON_LOGI("video-present","decoded=%llu present_ms=%llu shown=%d present_drops=%llu",decoded_frames_,(done-began)/1000ULL,shown?1:0,video_present_drops_);
+    VideoFrame f;bool have=false;EnterCriticalSection(&frame_cs_);if(ready_video_available_){move_frame(f,ready_video_frame_);ready_video_available_=false;have=true;}LeaveCriticalSection(&frame_cs_);if(!have)return;const std::uint64_t began=now_us();bool shown=platform_.present(f);const std::uint64_t done=now_us();if(decoded_frames_==1||decoded_frames_%120==0)ON_LOGI("video-present","decoded=%llu present_ms=%llu shown=%d present_drops=%llu frame_pool=%u",decoded_frames_,(done-began)/1000ULL,shown?1:0,video_present_drops_,(unsigned)video_frame_pool_.size());EnterCriticalSection(&frame_cs_);recycle_video_frame_locked(f);LeaveCriticalSection(&frame_cs_);
 #endif
 }
 
