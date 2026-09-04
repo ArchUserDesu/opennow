@@ -33,6 +33,10 @@ static const char* const kSessionFile = "uda:/opennow_session.json";
 #endif
 static const char* const kDeviceClient = "q61ddeJrVt7O90Nl-P-N7I36yctih4Ml6FyXLrb6j-U";
 static const char* const kDeviceUserAgent = "Mozilla/5.0 (X11; Linux x86_64; Steam Deck) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+static const char* const kNativeUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 NVIDIACEFClient/HEAD/debb5919f6 GFN-PC/2.0.80.173";
+static const char* const kLcarsClient = "ec7e38d4-03af-4b58-b131-cfb0495903ab";
+static const char* const kLibraryHash = "039e8c0d553972975485fee56e59f2549d2fdb518e247a42ab5022056a74406f";
+static const char* const kPanelsHash = "f8e26265a5db5c20e1334a6872cf04b6e3970507697f6ae55a6ddefa5420daf0";
 
 void sleep_ms(int ms) {
 #ifdef __LIBXENON__
@@ -48,7 +52,10 @@ std::int64_t auth_now_ms(){return (std::int64_t)time(NULL)*1000;}
 bool auth_near_expiry(const AuthSession&s){return s.tokens.expires_at_ms<=0||s.tokens.expires_at_ms<=auth_now_ms()+10LL*60LL*1000LL;}
 std::vector<std::string> token_headers(const std::string& bearer,bool form){
     std::vector<std::string> h;
-    h.push_back("Origin: https://play.geforcenow.com");h.push_back("Referer: https://play.geforcenow.com/");h.push_back("Accept: application/json, text/plain, */*");h.push_back(std::string("User-Agent: ")+kDeviceUserAgent);
+    h.push_back("Origin: https://play.geforcenow.com");
+    h.push_back("Referer: https://play.geforcenow.com/");
+    h.push_back("Accept: application/json, text/plain, */*");
+    h.push_back(std::string("User-Agent: ")+kDeviceUserAgent);
     if(!bearer.empty())h.push_back("Authorization: Bearer "+bearer);
     if(form)h.push_back("Content-Type: application/x-www-form-urlencoded; charset=UTF-8");
     return h;
@@ -99,6 +106,54 @@ LoginProvider select_provider(GfnClient&g,XenonPlatform&p){std::vector<LoginProv
 struct GameSort{bool operator()(const GameInfo&a,const GameInfo&b)const{const bool am=a.title.find("Marvel Rivals")!=std::string::npos,bm=b.title.find("Marvel Rivals")!=std::string::npos;if(am!=bm)return am;return a.title<b.title;}};
 void make_names(const std::vector<GameInfo>&games,std::vector<std::string>&names){names.clear();names.reserve(games.size());for(size_t i=0;i<games.size();++i)names.push_back(games[i].title+(games[i].store.empty()?"":" ["+games[i].store+"]"));}
 GameInfo resolve_game(GfnClient&g,AuthSession&auth,const GameInfo&selected){std::vector<GameInfo>found=g.fetch_catalog_games(auth,selected.title);if(found.empty())return selected;for(size_t i=0;i<found.size();++i)if(found[i].title==selected.title)return found[i];return found[0];}
+
+std::vector<std::string> native_graphql_headers(const AuthSession&s){
+    std::vector<std::string> h;
+    h.push_back("Accept: application/json, text/plain, */*");h.push_back("Content-Type: application/graphql");
+    h.push_back("Origin: https://play.geforcenow.com");h.push_back("Referer: https://play.geforcenow.com/");
+    h.push_back(std::string("Authorization: GFNJWT ")+GfnClient::session_jwt(s));h.push_back(std::string("nv-client-id: ")+kLcarsClient);
+    h.push_back("nv-client-type: NATIVE");h.push_back("nv-client-version: 2.0.80.173");h.push_back("nv-client-streamer: NVIDIA-CLASSIC");
+    h.push_back("nv-device-os: WINDOWS");h.push_back("nv-device-type: DESKTOP");h.push_back("nv-device-make: UNKNOWN");h.push_back("nv-device-model: UNKNOWN");h.push_back("nv-browser-type: CHROME");h.push_back(std::string("User-Agent: ")+kNativeUserAgent);
+    return h;
+}
+std::vector<std::string> native_server_headers(const AuthSession&s){std::vector<std::string>h=native_graphql_headers(s);for(size_t i=0;i<h.size();++i)if(h[i].find("Content-Type:")==0){h.erase(h.begin()+i);break;}return h;}
+std::string resolve_vpc_id(const AuthSession&s){
+    std::string base=s.provider.streaming_service_url;if(base.empty())base="https://prod.cloudmatchbeta.nvidiagrid.net/";if(base[base.size()-1]!='/')base+='/';
+    try{HttpClient http;HttpResponse r=http.get(base+"v2/serverInfo",native_server_headers(s));if(r.status_code==200){JsonPtr j=parse_json(r.body);json_t*rs=json_object_get(j.get(),"requestStatus");std::string id=js(rs,"serverId");if(!id.empty())return id;}}catch(...){ }
+    return "GFN-PC";
+}
+bool library_owned_status(const std::string&s){return s=="MANUAL"||s=="PLATFORM_SYNC"||s=="IN_LIBRARY";}
+void parse_library_app(json_t*app,std::vector<GameInfo>&out){
+    if(!json_is_object(app))return;GameInfo g;g.id=js(app,"id");g.title=js(app,"title");g.publisher=js(app,"publisherName");if(g.id.empty()||g.title.empty())return;
+    json_t*vars=json_object_get(app,"variants");if(json_is_array(vars)){size_t vi;json_t*v;json_array_foreach(vars,vi,v){GameVariant gv;gv.id=js(v,"id");gv.store=js(v,"appStore");json_t*vg=json_object_get(v,"gfn");json_t*lib=vg?json_object_get(vg,"library"):NULL;std::string status=js(lib,"status");gv.selected=jb(lib,"selected",false);if(library_owned_status(status)||gv.selected)g.in_library=true;if(g.launch_app_id.empty()||gv.selected){g.launch_app_id=gv.id;g.store=gv.store;}g.variants.push_back(gv);}}
+    if(!g.in_library)return;for(size_t i=0;i<out.size();++i)if(out[i].id==g.id)return;out.push_back(g);
+}
+std::vector<GameInfo> parse_library_panel(const std::string&body){
+    JsonPtr root=parse_json(body);json_t*errors=json_object_get(root.get(),"errors");if(json_is_array(errors)&&json_array_size(errors)>0)return std::vector<GameInfo>();
+    std::vector<GameInfo>out;json_t*data=json_object_get(root.get(),"data"),*panels=data?json_object_get(data,"panels"):NULL;if(!json_is_array(panels))return out;
+    size_t pi;json_t*panel;json_array_foreach(panels,pi,panel){json_t*sections=json_object_get(panel,"sections");if(!json_is_array(sections))continue;size_t si;json_t*section;json_array_foreach(sections,si,section){json_t*items=json_object_get(section,"items");if(!json_is_array(items))continue;size_t ii;json_t*item;json_array_foreach(items,ii,item){json_t*app=json_object_get(item,"app");parse_library_app(app,out);}}}
+    return out;
+}
+std::string library_url(const std::string&vpc,const char*hash){
+    const std::string vars=std::string("{\"vpcId\":\"")+vpc+"\",\"locale\":\"en_US\",\"panelNames\":[\"LIBRARY\"]}";
+    const std::string ext=std::string("{\"persistedQuery\":{\"sha256Hash\":\"")+hash+"\"}}";
+    char hu[32];
+#ifdef OPENNOW_XDK
+    _snprintf(hu,sizeof(hu),"%08x%08x",(unsigned)GetTickCount(),(unsigned)time(NULL));
+#else
+    std::snprintf(hu,sizeof(hu),"%08x%08x",(unsigned)time(NULL),(unsigned)time(NULL));
+#endif
+    hu[sizeof(hu)-1]=0;
+    return std::string("https://games.geforce.com/graphql?requestType=")+HttpClient::form_escape("panels/Library")+"&extensions="+HttpClient::form_escape(ext)+"&huId="+HttpClient::form_escape(hu)+"&variables="+HttpClient::form_escape(vars);
+}
+std::vector<GameInfo> fetch_library_fast(AuthSession&auth){
+    const std::string vpc=resolve_vpc_id(auth);HttpClient http;std::vector<std::string>h=native_graphql_headers(auth);
+    HttpResponse r=http.get(library_url(vpc,kLibraryHash),h);ON_LOGI("catalog","library panel primary HTTP=%d bytes=%u vpc=%s",r.status_code,(unsigned)r.body.size(),vpc.c_str());
+    std::vector<GameInfo>out;if(r.status_code==200){try{out=parse_library_panel(r.body);}catch(const std::exception&e){ON_LOGW("catalog","library panel primary parse failed: %s",e.what());}}
+    if(out.empty()){r=http.get(library_url(vpc,kPanelsHash),h);ON_LOGI("catalog","library panel fallback HTTP=%d bytes=%u",r.status_code,(unsigned)r.body.size());if(r.status_code==200){try{out=parse_library_panel(r.body);}catch(const std::exception&e){ON_LOGW("catalog","library panel fallback parse failed: %s",e.what());}}}
+    for(size_t i=0;i<out.size();++i)out[i].in_library=true;return out;
+}
+
 GameInfo select_game(GfnClient&g,AuthSession&auth,XenonPlatform&p){
     p.clear_text();ui_printf(p,"Loading GeForce NOW game list...\n");
 #ifdef OPENNOW_XDK
@@ -114,15 +169,15 @@ GameInfo select_game(GfnClient&g,AuthSession&auth,XenonPlatform&p){
 #endif
     std::vector<GameInfo>library;std::vector<std::string>library_names;bool library_loaded=false,library_tab=false;int indices[2]={0,0};GameInfo game;bool selected=false;
     for(;;){
-        if(library_tab&&!library_loaded){p.clear_text();ui_printf(p,"Loading My Library on demand...\nThis is only fetched when you open the Library tab.\n");
+        if(library_tab&&!library_loaded){p.clear_text();ui_printf(p,"Loading My Library...\n");
 #ifdef OPENNOW_XDK
             DWORD lb=GetTickCount();
 #endif
-            std::vector<GameInfo>auth_games=g.fetch_catalog_games(auth);for(size_t i=0;i<auth_games.size();++i)if(auth_games[i].in_library)library.push_back(auth_games[i]);std::stable_sort(library.begin(),library.end(),GameSort());make_names(library,library_names);library_loaded=true;
+            library=fetch_library_fast(auth);std::stable_sort(library.begin(),library.end(),GameSort());make_names(library,library_names);library_loaded=true;
 #ifdef OPENNOW_XDK
-            ON_LOGI("catalog","lazy library ready library=%u scanned=%u elapsed_ms=%u",(unsigned)library.size(),(unsigned)auth_games.size(),(unsigned)(GetTickCount()-lb));
+            ON_LOGI("catalog","library panel ready library=%u elapsed_ms=%u",(unsigned)library.size(),(unsigned)(GetTickCount()-lb));
 #else
-            ON_LOGI("catalog","lazy library ready library=%u scanned=%u",(unsigned)library.size(),(unsigned)auth_games.size());
+            ON_LOGI("catalog","library panel ready library=%u",(unsigned)library.size());
 #endif
         }
         const std::vector<GameInfo>&tab_games=library_tab?library:games;const std::vector<std::string>&tab_names=library_tab?library_names:names;int&idx=indices[library_tab?1:0];if(!tab_games.empty()&&idx>=(int)tab_games.size())idx=(int)tab_games.size()-1;
@@ -167,5 +222,5 @@ int main(){
     ui_printf(platform,"\nPress controller A to exit.\n");for(;;){platform.poll();opennow::GamepadState s;if(platform.read_gamepad(s)&&(s.buttons&0x1000))break;sleep_ms(20);}opennow::log_close();return 0;
 }
 #else
-int main(){std::puts("OpenNOW Xbox 360 target requires LibXenon or OPENNOW_XDK.");return 0;}
+int main(){std::puts("OpenNOW Xbox 360 target requires LibXenon or OPENNOW_XDK.\n");return 0;}
 #endif
