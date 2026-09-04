@@ -54,12 +54,12 @@ public:
         ctx_->flags |= AV_CODEC_FLAG_LOW_DELAY;
         ctx_->flags2 |= AV_CODEC_FLAG2_FAST;
 #endif
-        /* The 4-way FF_THREAD_SLICE experiment hangs inside avcodec_open2()
-           on the current Xbox-specific FFmpeg worker backend.  Restore the
-           last known-working single-thread configuration until xb_thread.c
-           can be repaired and validated independently. */
-        const int requested_thread_count=1;
-        const int requested_thread_type=0;
+        /* xb_thread.c now uses FFmpeg 1.2's native pthread startup barrier
+           instead of suspending/retargeting newborn worker threads.  Keep
+           LOW_DELAY and use slice threading so decoding gains parallelism
+           without the frame-thread latency penalty. */
+        const int requested_thread_count=4;
+        const int requested_thread_type=FF_THREAD_SLICE;
         ctx_->thread_count=requested_thread_count;
         ctx_->thread_type=requested_thread_type;
         /* The latest runtime log showed normal deblocking pushing 720p decode
