@@ -404,8 +404,7 @@ static std::string build_session_body(const GameInfo& g, const AuthSession& s, c
     json_object_set_new(f, "maxBitrateKbps", json_integer(c.bitrate_kbps));
     json_object_set_new(f, "codec", json_integer(1)); /* H.264 */
     json_object_set_new(f, "vsync", json_false());
-    /* Do not authorize CloudMatch to change the requested stream profile. */
-    json_object_set_new(f, "dynamicStreamingMode", json_integer(0));
+    json_object_set_new(f, "dynamicStreamingMode", json_integer(3));
     json_object_set_new(f, "audioChannelCount", json_integer(2));
     json_object_set_new(req, "requestedStreamingFeatures", f);
 
