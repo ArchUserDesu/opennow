@@ -54,7 +54,10 @@ public:
         ctx_->flags |= AV_CODEC_FLAG_LOW_DELAY;
         ctx_->flags2 |= AV_CODEC_FLAG2_FAST;
 #endif
-        ctx_->thread_count=1; ctx_->thread_type=0;
+        const int requested_thread_count=4;
+        const int requested_thread_type=FF_THREAD_SLICE;
+        ctx_->thread_count=requested_thread_count;
+        ctx_->thread_type=requested_thread_type;
         /* The latest runtime log showed normal deblocking pushing 720p decode
            to 51-72 ms/frame and causing thousands of access-unit drops.  Keep
            the dedicated decoder worker but restore the proven fast Xenon path. */
@@ -67,10 +70,12 @@ public:
 #endif
         ON_LOGD("video-decode","frame allocation returned ptr=%p",frame_);
         if(!frame_){ON_LOGE("video-decode","frame allocation failed");free_context();return false;}
-        ON_LOGI("video-decode","avcodec_open2 begin codec=%s single_thread=1",codec->name?codec->name:"<unknown>");
+        ON_LOGI("video-decode","avcodec_open2 begin codec=%s requested_threads=%d requested_type=%d",codec->name?codec->name:"<unknown>",requested_thread_count,requested_thread_type);
         int open_rc=avcodec_open2(ctx_,codec,NULL);
         if(open_rc<0){ON_LOGE("video-decode","avcodec_open2 failed rc=%d",open_rc);free_frame();free_context();return false;}
-        ON_LOGI("video-decode","FFmpeg H.264 open complete threads=%d type=%d skip_loop_filter=%d",ctx_->thread_count,ctx_->thread_type,(int)ctx_->skip_loop_filter);
+        const int caps=codec->capabilities;
+        ON_LOGI("video-decode","H264 threading requested=%d type=%d actual=%d active=%d caps=0x%08x caps_slice=%d caps_frame=%d",requested_thread_count,requested_thread_type,ctx_->thread_count,ctx_->active_thread_type,(unsigned)caps,(caps&CODEC_CAP_SLICE_THREADS)?1:0,(caps&CODEC_CAP_FRAME_THREADS)?1:0);
+        ON_LOGI("video-decode","FFmpeg H.264 open complete threads=%d type=%d active=%d skip_loop_filter=%d",ctx_->thread_count,ctx_->thread_type,ctx_->active_thread_type,(int)ctx_->skip_loop_filter);
         return true;
     }
 
