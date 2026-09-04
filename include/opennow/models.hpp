@@ -13,8 +13,7 @@ struct GameVariant { std::string id,store,internal_title; bool selected; GameVar
 struct GameInfo { std::string id,title,publisher,image_url,launch_app_id,store,internal_title; std::vector<GameVariant> variants; bool in_library; GameInfo():in_library(false){} };
 struct IceServerInfo { std::string url,username,credential; IceServerInfo(){} IceServerInfo(const std::string&u,const std::string&n,const std::string&c):url(u),username(n),credential(c){} };
 struct SessionInfo { std::string session_id; int status,queue_position; bool app_patching; std::string session_token,server_ip,signaling_url,media_ip; int media_port; std::vector<IceServerInfo> ice_servers; SessionInfo():status(-1),queue_position(0),app_patching(false),media_port(0){} };
-// Xbox fixed-quality profile: hold 1280x720 at 60 FPS and 8 Mbps.
-// The Xbox decoder remains software H.264; frame-threading work is intentionally
-// left to the dedicated FFmpeg follow-up experiment.
-struct StreamConfig { int width,height,fps,bitrate_kbps; bool persist_game_settings; StreamConfig():width(1280),height(720),fps(60),bitrate_kbps(8000),persist_game_settings(true){} };
+// Xbox low-latency adaptive profile: 1280x720 at 30 FPS, up to 8 Mbps.
+// CloudMatch/NVST may reduce bitrate dynamically when network conditions degrade.
+struct StreamConfig { int width,height,fps,bitrate_kbps; bool persist_game_settings; StreamConfig():width(1280),height(720),fps(30),bitrate_kbps(8000),persist_game_settings(true){} };
 }
