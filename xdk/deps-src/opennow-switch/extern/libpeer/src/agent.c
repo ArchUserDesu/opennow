@@ -161,6 +161,7 @@ static int agent_create_stun_addr(Agent* agent, Address* serv_addr) {
   Address bind_addr;
   StunMessage send_msg;
   StunMessage recv_msg;
+  IceCandidate* ice_candidate;
   memset(&send_msg, 0, sizeof(send_msg));
   memset(&recv_msg, 0, sizeof(recv_msg));
 
@@ -181,7 +182,7 @@ static int agent_create_stun_addr(Agent* agent, Address* serv_addr) {
 
   stun_parse_msg_buf(&recv_msg);
   memcpy(&bind_addr, &recv_msg.mapped_addr, sizeof(Address));
-  IceCandidate* ice_candidate = agent->local_candidates + agent->local_candidates_count;
+  ice_candidate = agent->local_candidates + agent->local_candidates_count;
   ice_candidate_create(ice_candidate, agent->local_candidates_count, ICE_CANDIDATE_TYPE_SRFLX, &bind_addr);
   agent->local_candidates_count++;
   return ret;
@@ -193,6 +194,7 @@ static int agent_create_turn_addr(Agent* agent, Address* serv_addr, const char* 
   Address turn_addr;
   StunMessage send_msg;
   StunMessage recv_msg;
+  IceCandidate* ice_candidate;
   memset(&recv_msg, 0, sizeof(recv_msg));
   memset(&send_msg, 0, sizeof(send_msg));
   stun_msg_create(&send_msg, STUN_METHOD_ALLOCATE);
@@ -240,7 +242,7 @@ static int agent_create_turn_addr(Agent* agent, Address* serv_addr, const char* 
 
   stun_parse_msg_buf(&recv_msg);
   memcpy(&turn_addr, &recv_msg.relayed_addr, sizeof(Address));
-  IceCandidate* ice_candidate = agent->local_candidates + agent->local_candidates_count;
+  ice_candidate = agent->local_candidates + agent->local_candidates_count;
   ice_candidate_create(ice_candidate, agent->local_candidates_count, ICE_CANDIDATE_TYPE_RELAY, &turn_addr);
   agent->local_candidates_count++;
   return ret;
@@ -308,7 +310,8 @@ void agent_create_ice_credential(Agent* agent) {
 }
 
 void agent_get_local_description(Agent* agent, char* description, int length) {
-  for (int i = 0; i < agent->local_candidates_count; i++) {
+  int i;
+  for (i = 0; i < agent->local_candidates_count; i++) {
     ice_candidate_to_description(&agent->local_candidates[i], description + strlen(description), length - strlen(description));
   }
 
@@ -341,9 +344,9 @@ static void agent_create_binding_response(Agent* agent, StunMessage* msg, Addres
 
 static void agent_create_binding_request(Agent* agent, StunMessage* msg) {
   uint64_t tie_breaker = 0;  // always be controlled
+  char username[584];
   // send binding request
   stun_msg_create(msg, STUN_CLASS_REQUEST | STUN_METHOD_BINDING);
-  char username[584];
   memset(username, 0, sizeof(username));
   snprintf(username, sizeof(username), "%s:%s", agent->remote_ufrag, agent->local_ufrag);
   stun_msg_write_attr(msg, STUN_ATTR_TYPE_USERNAME, strlen(username), username);
@@ -435,11 +438,10 @@ void agent_set_remote_description(Agent* agent, char* description) {
   a=candidate:1 1 UDP 1 36.231.28.50 38143 typ srflx
   */
   int i;
-
-  LOGD("Set remote description:\n%s", description);
-
   char* line_start = description;
   char* line_end = NULL;
+
+  LOGD("Set remote description:\n%s", description);
 
   while ((line_end = strstr(line_start, "\r\n")) != NULL) {
     if (strncmp(line_start, "a=ice-ufrag:", strlen("a=ice-ufrag:")) == 0) {
@@ -607,13 +609,14 @@ int agent_fail_nominated_remote(Agent* agent) {
 }
 
 void agent_get_candidate_pair_stats(Agent* agent, AgentCandidatePairStats* stats) {
+  int i;
   if (!agent || !stats) {
     return;
   }
 
   memset(stats, 0, sizeof(*stats));
   stats->total = agent->candidate_pairs_num;
-  for (int i = 0; i < agent->candidate_pairs_num; i++) {
+  for (i = 0; i < agent->candidate_pairs_num; i++) {
     switch (agent->candidate_pairs[i].state) {
       case ICE_CANDIDATE_STATE_FROZEN:
         stats->frozen++;

@@ -275,7 +275,6 @@ static int thread_init(AVCodecContext *avctx)
 {
     int i;
     ThreadContext *c;
-    HANDLE hThread;
     int thread_count = avctx->thread_count;
 
     if (!thread_count) {
@@ -317,11 +316,8 @@ static int thread_init(AVCodecContext *avctx)
            ff_thread_free(avctx);
            return -1;
         }
-        /* Xbox 360: Pin worker threads to specific hardware threads */
-        hThread = pthread_getw32threadhandle_np(c->workers[i]);
-        SuspendThread(hThread);
-        XSetThreadProcessor(hThread, hw_thread(i));
-        ResumeThread(hThread);
+        /* Keep FFmpeg 1.2's native pthread startup/barrier semantics here.
+           Do not suspend or retarget a slice worker before worker() has run. */
     }
 
     avcodec_thread_park_workers(c, thread_count);

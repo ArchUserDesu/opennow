@@ -1,8 +1,6 @@
 param(
   [ValidateSet('Debug','Release')][string]$Configuration = 'Release',
-  [string]$XdkRoot = '',
-  [switch]$SkipFetch,
-  [switch]$RefreshDeps
+  [string]$XdkRoot = ''
 )
 $ErrorActionPreference = 'Stop'
 $here = (Resolve-Path $PSScriptRoot).Path
@@ -32,7 +30,7 @@ Need (Join-Path $XdkRoot 'include\xbox\xtl.h') 'Xbox headers'
 Need (Join-Path $XdkRoot 'lib\xbox\xapilib.lib') 'Xbox import libraries'
 
 if (!(Get-Command python.exe -ErrorAction SilentlyContinue) -and !(Get-Command python3.exe -ErrorAction SilentlyContinue)) {
-  throw 'Python 3 is required to patch/generate dependency projects.'
+  throw 'Python 3 is required to prepare/generate dependency projects.'
 }
 $python = if (Get-Command python.exe -ErrorAction SilentlyContinue) { 'python.exe' } else { 'python3.exe' }
 
@@ -45,32 +43,16 @@ $requiredDeps = @(
   'xbmc360\libraries\ffmpeg\config.h',
   'xbmc360\libraries\ffmpeg\libavcodec\avcodec.h',
   'xbmc360\libraries\ffmpeg\libavcodec\h264.c',
+  'xbmc360\libraries\ffmpeg\libavcodec\xb_thread.c',
   'xbmc360\libraries\ffmpeg\vcproj\libavcodec\libavcodec.vcxproj',
   'xbmc360\libraries\ffmpeg\vcproj\libavutil\libavutil.vcxproj'
 )
 $missingDeps = @($requiredDeps | Where-Object { !(Test-Path (Join-Path $deps $_)) })
-$bundledComplete = ($missingDeps.Count -eq 0)
-
-if ($RefreshDeps) {
-  & (Join-Path $here 'fetch-deps.ps1') -Destination $deps
-  if ($LASTEXITCODE -ne 0) { throw 'Dependency refresh failed.' }
-} elseif (!$SkipFetch -and !$bundledComplete) {
-  Write-Host 'Bundled dependency tree is incomplete; fetching pinned dependencies...'
-  & (Join-Path $here 'fetch-deps.ps1') -Destination $deps
-  if ($LASTEXITCODE -ne 0) { throw 'Dependency fetch failed.' }
-} elseif ($bundledComplete) {
-  Write-Host 'Using bundled pinned dependencies (offline-capable build).'
-} else {
-  throw ('-SkipFetch was specified but xdk\deps-src is incomplete. Missing: ' + ($missingDeps -join ', '))
-}
-
-$missingDeps = @($requiredDeps | Where-Object { !(Test-Path (Join-Path $deps $_)) })
 if ($missingDeps.Count -ne 0) {
-  throw ('Required dependency files are missing: ' + ($missingDeps -join ', '))
+  throw ('Checked-in xdk\deps-src is incomplete. This build consumes the committed dependency sources directly. Missing: ' + ($missingDeps -join ', '))
 }
+Write-Host 'Using checked-in XDK dependency sources directly.'
 
-& $python (Join-Path $here 'patch-deps.py') --src $deps
-if ($LASTEXITCODE -ne 0) { throw 'patch-deps.py failed.' }
 & $python (Join-Path $here 'apply-overrides.py') --src $deps
 if ($LASTEXITCODE -ne 0) { throw 'apply-overrides.py failed.' }
 
