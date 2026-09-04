@@ -43,6 +43,8 @@
 typedef int (action_func)(AVCodecContext *c, void *arg);
 typedef int (action_func2)(AVCodecContext *c, void *arg, int jobnr, int threadnr);
 
+extern void opennow_ffmpeg_thread_log(const char* phase, int value0, int value1);
+
 /**
  * Xbox 360 hardware thread mapping.
  * The Xbox 360 Xenon CPU has 3 cores with 2 hardware threads each (6 total).
@@ -64,11 +66,12 @@ typedef struct ThreadContext {
     int job_count;
     int job_size;
 
-    pthread_cond_t last_job_cond;
     pthread_cond_t current_job_cond;
     pthread_mutex_t current_job_lock;
+    HANDLE workers_parked_event;
     int current_job;
     unsigned int current_execute;
+    unsigned int barrier_log_count;
     int done;
 } ThreadContext;
 
@@ -96,7 +99,7 @@ typedef struct PerThreadContext {
     int            allocated_buf_size; ///< Size allocated for avpkt.data
 
     AVFrame frame;                  ///< Output frame (for decoding) or input (for encoding).
-    int     got_frame;              ///< The output of got_picture_ptr from the last avcodec_decode_video() call.
+    int     got_frame;              ///< The output of got_picture_ptr from the last codec decode/encode call.
     int     result;                 ///< The result of the last codec decode/encode() call.
 
     enum {
@@ -109,51 +112,30 @@ typedef struct PerThreadContext {
         STATE_SETUP_FINISHED        ///< Set after the codec has called ff_thread_finish_setup().
     } state;
 
-    /**
-     * Array of frames passed to ff_thread_release_buffer().
-     * Frames are released after all threads referencing them are finished.
-     */
     AVFrame released_buffers[MAX_BUFFERS];
     int     num_released_buffers;
 
-    /**
-     * Array of progress values used by ff_thread_get_buffer().
-     */
     volatile int     progress[MAX_BUFFERS][2];
     volatile uint8_t progress_used[MAX_BUFFERS];
 
-    AVFrame *requested_frame;       ///< AVFrame the codec passed to get_buffer()
+    AVFrame *requested_frame;
 } PerThreadContext;
 
-/**
- * Context stored in the client AVCodecContext thread_opaque.
- */
 typedef struct FrameThreadContext {
-    PerThreadContext *threads;     ///< The contexts for each thread.
-    PerThreadContext *prev_thread; ///< The last thread submit_packet() was called on.
+    PerThreadContext *threads;
+    PerThreadContext *prev_thread;
 
-    pthread_mutex_t buffer_mutex;  ///< Mutex used to protect get/release_buffer().
+    pthread_mutex_t buffer_mutex;
 
-    int next_decoding;             ///< The next context to submit a packet to.
-    int next_finished;             ///< The next context to return output from.
-
-    int delaying;                  /**<
-                                    * Set for the first N packets, where N is the number of threads.
-                                    * While it is set, ff_thread_en/decode_frame won't return any results.
-                                    */
-
-    int die;                       ///< Set when threads should exit.
+    int next_decoding;
+    int next_finished;
+    int delaying;
+    int die;
 } FrameThreadContext;
 
-
-/**
- * Xbox 360 CPU detection. Returns the number of hardware threads available.
- * Xbox 360 has 6 hardware threads (3 cores x 2 threads).
- * We leave thread 0 for the system, so we use up to 5 threads.
- */
 int ff_get_logical_cpus(AVCodecContext *avctx)
 {
-    int nb_cpus = 5; /* Xbox 360: 6 HW threads, reserve thread 0 for system */
+    int nb_cpus = 5;
 
     av_log(avctx, AV_LOG_DEBUG, "Xbox 360: using %d logical cores\n", nb_cpus);
 
@@ -162,7 +144,6 @@ int ff_get_logical_cpus(AVCodecContext *avctx)
 
     return nb_cpus;
 }
-
 
 /* ============================================================
  * Slice Threading (worker pool)
@@ -179,10 +160,11 @@ static void* attribute_align_arg worker(void *v)
 
     pthread_mutex_lock(&c->current_job_lock);
     self_id = c->current_job++;
-    for (;;){
+    opennow_ffmpeg_thread_log("slice-worker-ready", self_id, c->current_job);
+    for (;;) {
         while (our_job >= c->job_count) {
             if (c->current_job == thread_count + c->job_count)
-                pthread_cond_signal(&c->last_job_cond);
+                SetEvent(c->workers_parked_event);
 
             while (last_execute == c->current_execute && !c->done)
                 pthread_cond_wait(&c->current_job_cond, &c->current_job_lock);
@@ -204,17 +186,47 @@ static void* attribute_align_arg worker(void *v)
     }
 }
 
-static av_always_inline void avcodec_thread_park_workers(ThreadContext *c, int thread_count)
+static int avcodec_thread_wait_workers(AVCodecContext *avctx, ThreadContext *c, int thread_count)
 {
-    while (c->current_job != thread_count + c->job_count)
-        pthread_cond_wait(&c->last_job_cond, &c->current_job_lock);
+    DWORD wait_rc;
+    int current_job;
+    int target_job;
+
+    wait_rc = WaitForSingleObject(c->workers_parked_event, INFINITE);
+    if (wait_rc != WAIT_OBJECT_0) {
+        opennow_ffmpeg_thread_log("slice-barrier-wait-failed", (int)wait_rc, (int)GetLastError());
+        return -1;
+    }
+
+    /* SetEvent happens while the final worker still owns current_job_lock.
+       Reacquiring it here guarantees that worker has actually entered its
+       pthread_cond_wait and released the mutex before the parent continues. */
+    pthread_mutex_lock(&c->current_job_lock);
+    current_job = c->current_job;
+    target_job = thread_count + c->job_count;
     pthread_mutex_unlock(&c->current_job_lock);
+
+    if (c->barrier_log_count < 8 || (c->barrier_log_count % 300) == 0)
+        opennow_ffmpeg_thread_log("slice-barrier-complete", current_job, target_job);
+    c->barrier_log_count++;
+
+    if (current_job != target_job) {
+        av_log(avctx, AV_LOG_ERROR,
+               "Xbox slice barrier mismatch current_job=%d target=%d\n",
+               current_job, target_job);
+        opennow_ffmpeg_thread_log("slice-barrier-mismatch", current_job, target_job);
+        return -1;
+    }
+    return 0;
 }
 
 static void thread_free(AVCodecContext *avctx)
 {
     ThreadContext *c = avctx->thread_opaque;
     int i;
+
+    if (!c)
+        return;
 
     pthread_mutex_lock(&c->current_job_lock);
     c->done = 1;
@@ -226,7 +238,8 @@ static void thread_free(AVCodecContext *avctx)
 
     pthread_mutex_destroy(&c->current_job_lock);
     pthread_cond_destroy(&c->current_job_cond);
-    pthread_cond_destroy(&c->last_job_cond);
+    if (c->workers_parked_event)
+        CloseHandle(c->workers_parked_event);
     av_free(c->workers);
     av_freep(&avctx->thread_opaque);
 }
@@ -235,6 +248,7 @@ static int avcodec_thread_execute(AVCodecContext *avctx, action_func* func, void
 {
     ThreadContext *c= avctx->thread_opaque;
     int dummy_ret;
+    int wait_rc;
 
     if (!(avctx->active_thread_type&FF_THREAD_SLICE) || avctx->thread_count <= 1)
         return avcodec_default_execute(avctx, func, arg, ret, job_count, job_size);
@@ -243,6 +257,7 @@ static int avcodec_thread_execute(AVCodecContext *avctx, action_func* func, void
         return 0;
 
     pthread_mutex_lock(&c->current_job_lock);
+    ResetEvent(c->workers_parked_event);
 
     c->current_job = avctx->thread_count;
     c->job_count = job_count;
@@ -257,9 +272,14 @@ static int avcodec_thread_execute(AVCodecContext *avctx, action_func* func, void
         c->rets_count = 1;
     }
     c->current_execute++;
+    if (c->barrier_log_count < 8 || (c->barrier_log_count % 300) == 0)
+        opennow_ffmpeg_thread_log("slice-execute-begin", job_count, (int)c->current_execute);
     pthread_cond_broadcast(&c->current_job_cond);
+    pthread_mutex_unlock(&c->current_job_lock);
 
-    avcodec_thread_park_workers(c, avctx->thread_count);
+    wait_rc = avcodec_thread_wait_workers(avctx, c, avctx->thread_count);
+    if (wait_rc < 0)
+        return wait_rc;
 
     return 0;
 }
@@ -300,45 +320,46 @@ static int thread_init(AVCodecContext *avctx)
         return -1;
     }
 
+    c->workers_parked_event = CreateEvent(NULL, TRUE, FALSE, NULL);
+    if (!c->workers_parked_event) {
+        av_free(c->workers);
+        av_free(c);
+        return -1;
+    }
+
     avctx->thread_opaque = c;
     c->current_job = 0;
     c->job_count = 0;
     c->job_size = 0;
+    c->barrier_log_count = 0;
     c->done = 0;
     pthread_cond_init(&c->current_job_cond, NULL);
-    pthread_cond_init(&c->last_job_cond, NULL);
     pthread_mutex_init(&c->current_job_lock, NULL);
-    pthread_mutex_lock(&c->current_job_lock);
+
+    opennow_ffmpeg_thread_log("slice-init-begin", thread_count, 0);
     for (i=0; i<thread_count; i++) {
         if(pthread_create(&c->workers[i], NULL, worker, avctx)) {
            avctx->thread_count = i;
-           pthread_mutex_unlock(&c->current_job_lock);
            ff_thread_free(avctx);
            return -1;
         }
-        /* Keep FFmpeg 1.2's native pthread startup/barrier semantics here.
-           Do not suspend or retarget a slice worker before worker() has run. */
     }
 
-    avcodec_thread_park_workers(c, thread_count);
+    if (avcodec_thread_wait_workers(avctx, c, thread_count) < 0) {
+        ff_thread_free(avctx);
+        return -1;
+    }
+    opennow_ffmpeg_thread_log("slice-init-complete", thread_count, c->current_job);
 
     avctx->execute = avcodec_thread_execute;
     avctx->execute2 = avcodec_thread_execute2;
     return 0;
 }
 
-
 /* ============================================================
  * Frame Threading
  * ============================================================ */
 
-/**
- * Codec worker thread.
- *
- * Automatically calls ff_thread_finish_setup() if the codec does
- * not provide an update_thread_context method, or if the codec returns
- * before calling it.
- */
 static attribute_align_arg void *frame_worker_thread(void *arg)
 {
     PerThreadContext *p = arg;
@@ -349,8 +370,8 @@ static attribute_align_arg void *frame_worker_thread(void *arg)
     pthread_mutex_lock(&p->mutex);
     while (1) {
         int i;
-            while (p->state == STATE_INPUT_READY && !fctx->die)
-                pthread_cond_wait(&p->input_cond, &p->mutex);
+        while (p->state == STATE_INPUT_READY && !fctx->die)
+            pthread_cond_wait(&p->input_cond, &p->mutex);
 
         if (fctx->die) break;
 
@@ -360,9 +381,6 @@ static attribute_align_arg void *frame_worker_thread(void *arg)
         avcodec_get_frame_defaults(&p->frame);
         p->got_frame = 0;
         p->result = codec->decode(avctx, &p->frame, &p->got_frame, &p->avpkt);
-
-        /* many decoders assign whole AVFrames, thus overwriting extended_data;
-         * make sure it's set correctly */
         p->frame.extended_data = p->frame.data;
 
         if (p->state == STATE_SETTING_UP) ff_thread_finish_setup(avctx);
@@ -384,13 +402,6 @@ static attribute_align_arg void *frame_worker_thread(void *arg)
     return NULL;
 }
 
-/**
- * Update the next thread's AVCodecContext with values from the reference thread's context.
- *
- * @param dst The destination context.
- * @param src The source context.
- * @param for_user 0 if the destination is a codec thread, 1 if the destination is the user's thread
- */
 static int update_context_from_thread(AVCodecContext *dst, AVCodecContext *src, int for_user)
 {
     int err = 0;
@@ -435,13 +446,6 @@ static int update_context_from_thread(AVCodecContext *dst, AVCodecContext *src, 
     return err;
 }
 
-/**
- * Update the next thread's AVCodecContext with values set by the user.
- *
- * @param dst The destination context.
- * @param src The source context.
- * @return 0 on success, negative error code on failure
- */
 static int update_context_from_user(AVCodecContext *dst, AVCodecContext *src)
 {
 #define copy_fields(s, e) memcpy(&dst->s, &src->s, (char*)&dst->e - (char*)&dst->s);
@@ -466,16 +470,14 @@ static int update_context_from_user(AVCodecContext *dst, AVCodecContext *src)
 
     if (src->slice_count && src->slice_offset) {
         if (dst->slice_count < src->slice_count) {
-            int *tmp = av_realloc(dst->slice_offset, src->slice_count *
-                                  sizeof(*dst->slice_offset));
+            int *tmp = av_realloc(dst->slice_offset, src->slice_count * sizeof(*dst->slice_offset));
             if (!tmp) {
                 av_free(dst->slice_offset);
                 return AVERROR(ENOMEM);
             }
             dst->slice_offset = tmp;
         }
-        memcpy(dst->slice_offset, src->slice_offset,
-               src->slice_count * sizeof(*dst->slice_offset));
+        memcpy(dst->slice_offset, src->slice_offset, src->slice_count * sizeof(*dst->slice_offset));
     }
     dst->slice_count = src->slice_count;
     return 0;
@@ -497,7 +499,6 @@ static void free_progress(AVFrame *f)
     p->progress_used[(progress - p->progress[0]) / 2] = 0;
 }
 
-/// Releases the buffers that this decoding thread was the last user of.
 static void release_delayed_buffers(PerThreadContext *p)
 {
     FrameThreadContext *fctx = p->parent;
@@ -554,14 +555,7 @@ static int submit_packet(PerThreadContext *p, AVPacket *avpkt)
     pthread_cond_signal(&p->input_cond);
     pthread_mutex_unlock(&p->mutex);
 
-    /*
-     * If the client doesn't have a thread-safe get_buffer(),
-     * then decoding threads call back to the main thread,
-     * and it calls back to the client here.
-     */
-
-    if (!p->avctx->thread_safe_callbacks &&
-         p->avctx->get_buffer != avcodec_default_get_buffer) {
+    if (!p->avctx->thread_safe_callbacks && p->avctx->get_buffer != avcodec_default_get_buffer) {
         while (p->state != STATE_SETUP_FINISHED && p->state != STATE_INPUT_READY) {
             pthread_mutex_lock(&p->progress_mutex);
             while (p->state == STATE_SETTING_UP)
@@ -591,19 +585,11 @@ int ff_thread_decode_frame(AVCodecContext *avctx,
     PerThreadContext *p;
     int err;
 
-    /*
-     * Submit a packet to the next decoding thread.
-     */
-
     p = &fctx->threads[fctx->next_decoding];
     err = update_context_from_user(p->avctx, avctx);
     if (err) return err;
     err = submit_packet(p, avpkt);
     if (err) return err;
-
-    /*
-     * If we're still receiving the initial packets, don't return a frame.
-     */
 
     if (fctx->delaying) {
         if (fctx->next_decoding >= (avctx->thread_count-1)) fctx->delaying = 0;
@@ -612,13 +598,6 @@ int ff_thread_decode_frame(AVCodecContext *avctx,
         if (avpkt->size)
             return avpkt->size;
     }
-
-    /*
-     * Return the next available frame from the oldest thread.
-     * If we're at the end of the stream, then we have to skip threads that
-     * didn't output a frame, because we don't want to accidentally signal
-     * EOF (avpkt->size == 0 && *got_picture_ptr == 0).
-     */
 
     do {
         p = &fctx->threads[finished++];
@@ -633,13 +612,6 @@ int ff_thread_decode_frame(AVCodecContext *avctx,
         *picture = p->frame;
         *got_picture_ptr = p->got_frame;
         picture->pkt_dts = p->avpkt.dts;
-
-        /*
-         * A later call with avkpt->size == 0 may loop over all threads,
-         * including this one, searching for a frame to return before being
-         * stopped by the "finished != fctx->next_finished" condition.
-         * Make sure we don't mistakenly return the same frame again.
-         */
         p->got_frame = 0;
 
         if (finished >= avctx->thread_count) finished = 0;
@@ -651,7 +623,6 @@ int ff_thread_decode_frame(AVCodecContext *avctx,
 
     fctx->next_finished = finished;
 
-    /* return the size of the consumed packet if no error occurred */
     return (p->result >= 0) ? avpkt->size : p->result;
 }
 
@@ -706,7 +677,6 @@ void ff_thread_finish_setup(AVCodecContext *avctx) {
     pthread_mutex_unlock(&p->progress_mutex);
 }
 
-/// Waits for all threads to finish.
 static void park_frame_worker_threads(FrameThreadContext *fctx, int thread_count)
 {
     int i;
@@ -753,15 +723,6 @@ static void frame_thread_free(AVCodecContext *avctx, int thread_count)
         p->thread_init=0;
     }
 
-    /*
-     * Xbox 360: Two-pass cleanup for frame threading.
-     * Pass 1: Release all delayed buffers across ALL threads first,
-     * while all thread contexts are still valid.
-     * Pass 2: Close codecs and set codec to NULL.
-     * This prevents cross-thread buffer ownership issues where
-     * codec->close defers buffers owned by other thread contexts
-     * that get freed before release_delayed_buffers runs.
-     */
     for (i = 0; i < thread_count; i++)
         release_delayed_buffers(&fctx->threads[i]);
 
@@ -887,7 +848,6 @@ static int frame_thread_init(AVCodecContext *avctx)
         if(!p->thread_init)
             goto error;
 
-        /* Xbox 360: Pin frame worker threads to specific hardware threads */
         hThread = pthread_getw32threadhandle_np(p->thread);
         SuspendThread(hThread);
         XSetThreadProcessor(hThread, hw_thread(i));
@@ -921,7 +881,6 @@ void ff_thread_flush(AVCodecContext *avctx)
     fctx->prev_thread = NULL;
     for (i = 0; i < avctx->thread_count; i++) {
         PerThreadContext *p = &fctx->threads[i];
-        // Make sure decode flush calls with size=0 won't return old frames
         p->got_frame = 0;
 
         release_delayed_buffers(p);
@@ -992,8 +951,7 @@ int ff_thread_get_buffer(AVCodecContext *avctx, AVFrame *f)
     progress[0] =
     progress[1] = -1;
 
-    if (avctx->thread_safe_callbacks ||
-        avctx->get_buffer == avcodec_default_get_buffer) {
+    if (avctx->thread_safe_callbacks || avctx->get_buffer == avcodec_default_get_buffer) {
         err = ff_get_buffer(avctx, f);
     } else {
         pthread_mutex_lock(&p->progress_mutex);
@@ -1030,13 +988,6 @@ void ff_thread_release_buffer(AVCodecContext *avctx, AVFrame *f)
         return;
 
     if (!(avctx->active_thread_type&FF_THREAD_FRAME)) {
-        /*
-         * Xbox 360: Use f->owner for buffer release when available.
-         * During frame threading cleanup, frames may have been allocated by
-         * a different thread context than avctx. The buffer must be released
-         * from the correct pool (f->owner->internal->buffer[]) or
-         * avcodec_default_release_buffer will fail to find it.
-         */
         AVCodecContext *owner = (f->owner && f->owner->release_buffer) ? f->owner : avctx;
         owner->release_buffer(owner, f);
         return;
@@ -1057,15 +1008,6 @@ void ff_thread_release_buffer(AVCodecContext *avctx, AVFrame *f)
     memset(f->data, 0, sizeof(f->data));
 }
 
-/**
- * Set the threading algorithms used.
- *
- * Threading requires more than one thread.
- * Frame threading requires entire frames to be passed to the codec,
- * and introduces extra decoding delay, so is incompatible with low_delay.
- *
- * @param avctx The context.
- */
 static void validate_thread_parameters(AVCodecContext *avctx)
 {
     int frame_threading_supported = (avctx->codec->capabilities & CODEC_CAP_FRAME_THREADS)
@@ -1111,6 +1053,8 @@ int ff_thread_init(AVCodecContext *avctx)
 
 void ff_thread_free(AVCodecContext *avctx)
 {
+    if (!avctx->thread_opaque)
+        return;
     if (avctx->active_thread_type&FF_THREAD_FRAME)
         frame_thread_free(avctx, avctx->thread_count);
     else
