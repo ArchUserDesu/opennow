@@ -83,6 +83,7 @@ typedef struct PerThreadContext {
 
     pthread_t      thread;
     int            thread_init;
+    int            thread_index;
     pthread_cond_t input_cond;      ///< Used to wait for a new packet from the main thread.
     pthread_cond_t progress_cond;   ///< Used by child threads to wait for progress to change.
     pthread_cond_t output_cond;     ///< Used by the main thread to wait for frames to finish.
@@ -346,6 +347,7 @@ static attribute_align_arg void *frame_worker_thread(void *arg)
     AVCodecContext *avctx = p->avctx;
     const AVCodec *codec = avctx->codec;
 
+    av_log(avctx, AV_LOG_INFO, "Xbox frame-worker entered i=%d\n", p->thread_index);
     pthread_mutex_lock(&p->mutex);
     while (1) {
         int i;
@@ -809,7 +811,6 @@ static int frame_thread_init(AVCodecContext *avctx)
     AVCodecContext *src = avctx;
     FrameThreadContext *fctx;
     int i, err = 0;
-    HANDLE hThread;
 
     if (!thread_count) {
         int nb_cpus = ff_get_logical_cpus(avctx);
@@ -826,6 +827,7 @@ static int frame_thread_init(AVCodecContext *avctx)
         return 0;
     }
 
+    av_log(avctx, AV_LOG_INFO, "Xbox frame-thread-init begin count=%d\n", thread_count);
     avctx->thread_opaque = fctx = av_mallocz(sizeof(FrameThreadContext));
 
     fctx->threads = av_mallocz(sizeof(PerThreadContext) * thread_count);
@@ -844,6 +846,7 @@ static int frame_thread_init(AVCodecContext *avctx)
 
         p->parent = fctx;
         p->avctx  = copy;
+        p->thread_index = i;
 
         if (!copy) {
             err = AVERROR(ENOMEM);
@@ -882,19 +885,18 @@ static int frame_thread_init(AVCodecContext *avctx)
 
         if (err) goto error;
 
+        av_log(avctx, AV_LOG_INFO, "Xbox frame-worker create i=%d\n", i);
         err = AVERROR(pthread_create(&p->thread, NULL, frame_worker_thread, p));
         p->thread_init= !err;
         if(!p->thread_init)
             goto error;
 
-        /* Xbox 360: Pin frame worker threads to specific hardware threads */
-        hThread = pthread_getw32threadhandle_np(p->thread);
-        SuspendThread(hThread);
-        XSetThreadProcessor(hThread, hw_thread(i));
-        SetThreadPriority(hThread, THREAD_PRIORITY_HIGHEST);
-        ResumeThread(hThread);
+        /* Let pthreads-win32/XDK schedule a newly-created frame worker
+         * naturally. Suspending and retargeting the newborn pthread here can
+         * leave it non-runnable before FFmpeg's startup synchronization. */
     }
 
+    av_log(avctx, AV_LOG_INFO, "Xbox frame-thread-init complete count=%d\n", thread_count);
     return 0;
 
 error:

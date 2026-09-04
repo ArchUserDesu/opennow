@@ -8,10 +8,14 @@ extern "C" {
 #if LIBAVCODEC_VERSION_MAJOR >= 55
 #include <libavutil/frame.h>
 #endif
+#if LIBAVCODEC_VERSION_MAJOR >= 57
+#include <libavutil/error.h>
+#endif
 #include <libavutil/pixfmt.h>
 #include <libavutil/mem.h>
 }
 
+#include <cerrno>
 #include <cstring>
 #include <limits>
 
@@ -52,7 +56,7 @@ void register_h264_decoder() {
 
 class FFmpegH264Decoder : public VideoDecoder {
 public:
-    FFmpegH264Decoder() : ctx_(NULL), frame_(NULL), decoded_count_(0) {}
+    FFmpegH264Decoder() : ctx_(NULL), frame_(NULL), submitted_count_(0), decoded_count_(0), no_frame_count_(0), error_count_(0) {}
 private:
     FFmpegH264Decoder(const FFmpegH264Decoder&);
     FFmpegH264Decoder& operator=(const FFmpegH264Decoder&);
@@ -60,33 +64,57 @@ public:
     ~FFmpegH264Decoder() { free_frame(); free_context(); }
 
     bool open(int width, int height, int fps) {
-        (void)fps;
-        free_frame(); free_context(); decoded_count_=0;
+        free_frame(); free_context(); submitted_count_=0;decoded_count_=0;no_frame_count_=0;error_count_=0;
         if (!ensure_xdk_pthreads_initialized()) return false;
         register_h264_decoder();
         const AVCodec* codec = avcodec_find_decoder(AV_CODEC_ID_H264);
-        ON_LOGI("video-decode", "FFmpeg H.264 open begin version=%u target=%dx%d fps=%d",(unsigned)LIBAVCODEC_VERSION_MAJOR,width,height,fps);
+        ON_LOGI("video-decode", "FFmpeg H.264 open begin version=%u major=%u target=%dx%d fps=%d",(unsigned)avcodec_version(),(unsigned)LIBAVCODEC_VERSION_MAJOR,width,height,fps);
         if (!codec) { ON_LOGE("video-decode","avcodec_find_decoder H264 returned null"); return false; }
         ctx_ = avcodec_alloc_context3(codec);
         ON_LOGD("video-decode", "context allocation returned ptr=%p",ctx_);
         if(!ctx_) { ON_LOGE("video-decode","avcodec_alloc_context3 failed"); return false; }
+
 #if LIBAVCODEC_VERSION_MAJOR < 56
+#if defined(OPENNOW_XDK)
+        ctx_->flags &= ~CODEC_FLAG_LOW_DELAY;
+#else
         ctx_->flags |= CODEC_FLAG_LOW_DELAY;
+#endif
         ctx_->flags2 |= CODEC_FLAG2_FAST;
 #else
+#if defined(OPENNOW_XDK)
+        ctx_->flags &= ~AV_CODEC_FLAG_LOW_DELAY;
+#else
         ctx_->flags |= AV_CODEC_FLAG_LOW_DELAY;
+#endif
         ctx_->flags2 |= AV_CODEC_FLAG2_FAST;
 #endif
-        /* Xbox 360/XDK requires parallel H.264 decode to sustain the stream.
-           The bundled pthreads-win32 Xbox port is initialized explicitly
-           before FFmpeg startup, so use FFmpeg 1.2's native 4-way slice pool. */
+
+#if defined(OPENNOW_XDK)
+        /* FFmpeg frame threading pipelines complete H.264 frames. Start with
+           two workers: one extra frame of decode latency and the smallest
+           useful overlap on Xenon. LOW_DELAY must remain clear or FFmpeg 1.2
+           will silently refuse FF_THREAD_FRAME. */
+        const int requested_thread_count=2;
+        const int requested_thread_type=FF_THREAD_FRAME;
+#else
         const int requested_thread_count=4;
         const int requested_thread_type=FF_THREAD_SLICE;
+#endif
         ctx_->thread_count=requested_thread_count;
         ctx_->thread_type=requested_thread_type;
         ctx_->skip_loop_filter=AVDISCARD_ALL;
         ctx_->width=width; ctx_->height=height;
-        ON_LOGI("video-decode","XDK decoder mode slice_threads=4 frame_threads=0 low_delay=1 fast=1 skip_loop_filter=%d",(int)ctx_->skip_loop_filter);
+
+#if LIBAVCODEC_VERSION_MAJOR < 56
+        const int low_delay_enabled=(ctx_->flags&CODEC_FLAG_LOW_DELAY)?1:0;
+        const int fast_enabled=(ctx_->flags2&CODEC_FLAG2_FAST)?1:0;
+#else
+        const int low_delay_enabled=(ctx_->flags&AV_CODEC_FLAG_LOW_DELAY)?1:0;
+        const int fast_enabled=(ctx_->flags2&AV_CODEC_FLAG2_FAST)?1:0;
+#endif
+        ON_LOGI("video-decode","decoder mode requested_threads=%d requested_type=%d frame_threads=%d slice_threads=%d low_delay=%d fast=%d skip_loop_filter=%d",requested_thread_count,requested_thread_type,requested_thread_type==FF_THREAD_FRAME?1:0,requested_thread_type==FF_THREAD_SLICE?1:0,low_delay_enabled,fast_enabled,(int)ctx_->skip_loop_filter);
+
 #if LIBAVCODEC_VERSION_MAJOR < 55
         frame_=avcodec_alloc_frame();
 #else
@@ -99,29 +127,40 @@ public:
         ON_LOGI("video-decode","avcodec_open2 returned rc=%d",open_rc);
         if(open_rc<0){ON_LOGE("video-decode","avcodec_open2 failed rc=%d",open_rc);free_frame();free_context();return false;}
         const int caps=codec->capabilities;
-        ON_LOGI("video-decode","H264 threading requested=%d type=%d actual=%d active=%d caps=0x%08x caps_slice=%d caps_frame=%d",requested_thread_count,requested_thread_type,ctx_->thread_count,ctx_->active_thread_type,(unsigned)caps,(caps&CODEC_CAP_SLICE_THREADS)?1:0,(caps&CODEC_CAP_FRAME_THREADS)?1:0);
-        if(ctx_->active_thread_type!=FF_THREAD_SLICE){ON_LOGE("video-decode","slice threading did not activate active_thread_type=%d",ctx_->active_thread_type);free_frame();free_context();return false;}
+#if LIBAVCODEC_VERSION_MAJOR < 56
+        const int caps_slice=(caps&CODEC_CAP_SLICE_THREADS)?1:0;
+        const int caps_frame=(caps&CODEC_CAP_FRAME_THREADS)?1:0;
+#else
+        const int caps_slice=(caps&AV_CODEC_CAP_SLICE_THREADS)?1:0;
+        const int caps_frame=(caps&AV_CODEC_CAP_FRAME_THREADS)?1:0;
+#endif
+        ON_LOGI("video-decode","H264 threading requested=%d type=%d actual=%d configured_type=%d active=%d caps=0x%08x caps_slice=%d caps_frame=%d low_delay=%d fast=%d skip_loop_filter=%d",requested_thread_count,requested_thread_type,ctx_->thread_count,ctx_->thread_type,ctx_->active_thread_type,(unsigned)caps,caps_slice,caps_frame,low_delay_enabled,fast_enabled,(int)ctx_->skip_loop_filter);
+        if(ctx_->active_thread_type!=requested_thread_type){ON_LOGE("video-decode","requested threading did not activate requested_type=%d active_thread_type=%d",requested_thread_type,ctx_->active_thread_type);free_frame();free_context();return false;}
         ON_LOGI("video-decode","FFmpeg H.264 open complete threads=%d type=%d active=%d skip_loop_filter=%d",ctx_->thread_count,ctx_->thread_type,ctx_->active_thread_type,(int)ctx_->skip_loop_filter);
         return true;
     }
 
-    bool decode(const std::uint8_t* data,std::size_t size,VideoFrame& out) {
-        if(!ctx_||!frame_||!data||size==0||size>static_cast<std::size_t>(std::numeric_limits<int>::max()))return false;
-        if(decoded_count_==0)ON_LOGI("video-decode","first H264 access unit decode begin bytes=%u",(unsigned)size);
+    VideoDecodeResult decode(const std::uint8_t* data,std::size_t size,VideoFrame& out) {
+        if(!ctx_||!frame_||!data||size==0||size>static_cast<std::size_t>(std::numeric_limits<int>::max())){++error_count_;return VideoDecodeError;}
+        ++submitted_count_;
+        if(submitted_count_==1)ON_LOGI("video-decode","first H264 access unit decode begin bytes=%u",(unsigned)size);
         AVPacket packet;std::memset(&packet,0,sizeof(packet));packet.data=const_cast<std::uint8_t*>(data);packet.size=static_cast<int>(size);
 #if LIBAVCODEC_VERSION_MAJOR < 57
         int got_frame=0;
         const int rc=avcodec_decode_video2(ctx_,frame_,&got_frame,&packet);
-        if(decoded_count_==0)ON_LOGI("video-decode","first H264 access unit decode returned rc=%d got_frame=%d",rc,got_frame);
-        if(rc<0||!got_frame){if(rc<0)ON_LOGE("video-decode","decode failed rc=%d packet_bytes=%u",rc,(unsigned)size);return false;}
+        if(submitted_count_==1)ON_LOGI("video-decode","first H264 access unit decode returned rc=%d got_frame=%d",rc,got_frame);
+        if(rc<0){++error_count_;ON_LOGE("video-decode","decode failed rc=%d packet_bytes=%u submitted=%llu errors=%llu",rc,(unsigned)size,submitted_count_,error_count_);return VideoDecodeError;}
+        if(!got_frame){++no_frame_count_;if(no_frame_count_<=4||no_frame_count_%300==0)ON_LOGI("video-decode","packet accepted without output submitted=%llu no_frame=%llu frames=%llu packet_bytes=%u",submitted_count_,no_frame_count_,decoded_count_,(unsigned)size);return VideoDecodeNoFrame;}
 #else
-        if(avcodec_send_packet(ctx_,&packet)<0)return false;
+        const int send_rc=avcodec_send_packet(ctx_,&packet);
+        if(send_rc<0){++error_count_;ON_LOGE("video-decode","send packet failed rc=%d packet_bytes=%u submitted=%llu errors=%llu",send_rc,(unsigned)size,submitted_count_,error_count_);return VideoDecodeError;}
         const int rc=avcodec_receive_frame(ctx_,frame_);
-        if(rc<0)return false;
+        if(rc==AVERROR(EAGAIN)||rc==AVERROR_EOF){++no_frame_count_;if(no_frame_count_<=4||no_frame_count_%300==0)ON_LOGI("video-decode","packet accepted without output submitted=%llu no_frame=%llu frames=%llu packet_bytes=%u",submitted_count_,no_frame_count_,decoded_count_,(unsigned)size);return VideoDecodeNoFrame;}
+        if(rc<0){++error_count_;ON_LOGE("video-decode","receive frame failed rc=%d packet_bytes=%u submitted=%llu errors=%llu",rc,(unsigned)size,submitted_count_,error_count_);return VideoDecodeError;}
 #endif
         ++decoded_count_; out.width=frame_->width;out.height=frame_->height;out.pts=frame_->pts;
         if(decoded_count_<=4||decoded_count_%300==0){
-            ON_LOGI("video-frame","decoded=%llu coded_bytes=%u actual=%dx%d format=%d linesize=%d,%d,%d range=%s",decoded_count_,(unsigned)size,frame_->width,frame_->height,frame_->format,frame_->linesize[0],frame_->linesize[1],frame_->linesize[2],frame_->format==AV_PIX_FMT_YUVJ420P?"full":"limited");
+            ON_LOGI("video-frame","decoded=%llu submitted=%llu no_frame=%llu errors=%llu coded_bytes=%u actual=%dx%d format=%d linesize=%d,%d,%d range=%s",decoded_count_,submitted_count_,no_frame_count_,error_count_,(unsigned)size,frame_->width,frame_->height,frame_->format,frame_->linesize[0],frame_->linesize[1],frame_->linesize[2],frame_->format==AV_PIX_FMT_YUVJ420P?"full":"limited");
         }
         if(frame_->format==AV_PIX_FMT_YUV420P||frame_->format==AV_PIX_FMT_YUVJ420P){
             out.format=frame_->format==AV_PIX_FMT_YUVJ420P?PixelFormat_YUV420P_FULL:PixelFormat_YUV420P;
@@ -132,7 +171,7 @@ public:
                 out.plane[plane].resize(static_cast<std::size_t>(plane_width)*static_cast<std::size_t>(plane_height));
                 for(int y=0;y<plane_height;++y)std::memcpy(&out.plane[plane][0]+static_cast<std::size_t>(y)*plane_width,frame_->data[plane]+static_cast<std::size_t>(y)*frame_->linesize[plane],static_cast<std::size_t>(plane_width));
             }
-            return true;
+            return VideoDecodeFrame;
         }
         if(frame_->format==AV_PIX_FMT_NV12){
             out.format=PixelFormat_NV12;out.stride[0]=out.width;out.stride[1]=out.width;out.stride[2]=0;
@@ -140,12 +179,12 @@ public:
             out.plane[1].resize(static_cast<std::size_t>(out.width)*static_cast<std::size_t>((out.height+1)/2));out.plane[2].clear();
             for(int y=0;y<out.height;++y)std::memcpy(&out.plane[0][0]+static_cast<std::size_t>(y)*out.width,frame_->data[0]+static_cast<std::size_t>(y)*frame_->linesize[0],static_cast<std::size_t>(out.width));
             for(int y=0;y<(out.height+1)/2;++y)std::memcpy(&out.plane[1][0]+static_cast<std::size_t>(y)*out.width,frame_->data[1]+static_cast<std::size_t>(y)*frame_->linesize[1],static_cast<std::size_t>(out.width));
-            return true;
+            return VideoDecodeFrame;
         }
-        ON_LOGE("video-decode","unsupported pixel format=%d size=%dx%d",frame_->format,out.width,out.height);return false;
+        ++error_count_;ON_LOGE("video-decode","unsupported pixel format=%d size=%dx%d submitted=%llu errors=%llu",frame_->format,out.width,out.height,submitted_count_,error_count_);return VideoDecodeError;
     }
 
-    void flush(){if(ctx_)avcodec_flush_buffers(ctx_);}
+    void flush(){if(ctx_){ON_LOGI("video-decode","flush submitted=%llu frames=%llu no_frame=%llu errors=%llu",submitted_count_,decoded_count_,no_frame_count_,error_count_);avcodec_flush_buffers(ctx_);}}
 private:
     void free_frame(){if(!frame_)return;
 #if LIBAVCODEC_VERSION_MAJOR < 55
@@ -161,7 +200,7 @@ private:
         avcodec_free_context(&ctx_);
 #endif
     }
-    AVCodecContext* ctx_;AVFrame* frame_;unsigned long long decoded_count_;
+    AVCodecContext* ctx_;AVFrame* frame_;unsigned long long submitted_count_,decoded_count_,no_frame_count_,error_count_;
 };
 }
 VideoDecoder* make_ffmpeg_h264_decoder(){return new FFmpegH264Decoder();}

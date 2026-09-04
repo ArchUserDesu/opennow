@@ -116,11 +116,15 @@ void WebRtcSession::video_loop(){
         if(unit.data.empty()){WaitForSingleObject(video_event_,2);continue;}
         VideoFrame f;EnterCriticalSection(&frame_cs_);acquire_video_frame_locked(f);LeaveCriticalSection(&frame_cs_);
         const std::uint64_t began=now_us();const std::uint64_t queue_wait_ms=unit.enqueued_us&&began>=unit.enqueued_us?(began-unit.enqueued_us)/1000ULL:0;
-        if(decoder_&&decoder_->decode(&unit.data[0],unit.data.size(),f)){
+        const VideoDecodeResult decode_result=decoder_?decoder_->decode(&unit.data[0],unit.data.size(),f):VideoDecodeError;
+        if(decode_result==VideoDecodeFrame){
             const std::uint64_t done=now_us();++decoded_frames_;
             EnterCriticalSection(&frame_cs_);if(ready_video_available_){++video_present_drops_;recycle_video_frame_locked(ready_video_frame_);}move_frame(ready_video_frame_,f);ready_video_available_=true;LeaveCriticalSection(&frame_cs_);
             if(decoded_frames_==1||decoded_frames_%120==0)ON_LOGI("video-perf","decoded frame=%llu decode_ms=%llu queue_wait_ms=%llu compressed=%u present_drops=%llu buffer_reuse=%llu/%llu",decoded_frames_,(done-began)/1000ULL,queue_wait_ms,(unsigned)unit.data.size(),video_present_drops_,video_buffer_reuses_,video_buffer_allocations_);
-        }else{++video_decode_failures_;EnterCriticalSection(&frame_cs_);recycle_video_frame_locked(f);LeaveCriticalSection(&frame_cs_);if(!unit.idr)request_keyframe_async();}
+        }else{
+            EnterCriticalSection(&frame_cs_);recycle_video_frame_locked(f);LeaveCriticalSection(&frame_cs_);
+            if(decode_result==VideoDecodeError){++video_decode_failures_;if(!unit.idr)request_keyframe_async();}
+        }
         EnterCriticalSection(&video_cs_);recycle_video_buffer(unit.data);LeaveCriticalSection(&video_cs_);
     }
 }
@@ -267,7 +271,7 @@ void WebRtcSession::decode_pending_video(){
 #if defined(OPENNOW_XDK)
     return;
 #else
-    if(!decoder_||pending_video_units_.empty())return;QueuedVideoUnit unit;unit.data.swap(pending_video_units_.front().data);unit.enqueued_us=pending_video_units_.front().enqueued_us;unit.idr=pending_video_units_.front().idr;pending_video_units_.pop_front();const std::uint64_t began=now_us();VideoFrame f;if(decoder_->decode(&unit.data[0],unit.data.size(),f)){const std::uint64_t decoded_at=now_us();++decoded_frames_;const bool shown=platform_.present(f);const std::uint64_t done=now_us();if(decoded_frames_==1||decoded_frames_%120==0)ON_LOGI("video-perf","frame=%llu decode_ms=%llu present_ms=%llu compressed=%u pending=%u shown=%d",decoded_frames_,(decoded_at-began)/1000ULL,(done-decoded_at)/1000ULL,(unsigned)unit.data.size(),(unsigned)pending_video_units_.size(),shown?1:0);}else{++video_decode_failures_;request_keyframe_async();}recycle_video_buffer(unit.data);
+    if(!decoder_||pending_video_units_.empty())return;QueuedVideoUnit unit;unit.data.swap(pending_video_units_.front().data);unit.enqueued_us=pending_video_units_.front().enqueued_us;unit.idr=pending_video_units_.front().idr;pending_video_units_.pop_front();const std::uint64_t began=now_us();VideoFrame f;const VideoDecodeResult decode_result=decoder_->decode(&unit.data[0],unit.data.size(),f);if(decode_result==VideoDecodeFrame){const std::uint64_t decoded_at=now_us();++decoded_frames_;const bool shown=platform_.present(f);const std::uint64_t done=now_us();if(decoded_frames_==1||decoded_frames_%120==0)ON_LOGI("video-perf","frame=%llu decode_ms=%llu present_ms=%llu compressed=%u pending=%u shown=%d",decoded_frames_,(decoded_at-began)/1000ULL,(done-decoded_at)/1000ULL,(unsigned)unit.data.size(),(unsigned)pending_video_units_.size(),shown?1:0);}else if(decode_result==VideoDecodeError){++video_decode_failures_;request_keyframe_async();}recycle_video_buffer(unit.data);
 #endif
 }
 void WebRtcSession::present_ready_video(){
