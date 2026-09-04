@@ -30,7 +30,7 @@ Need (Join-Path $XdkRoot 'include\xbox\xtl.h') 'Xbox headers'
 Need (Join-Path $XdkRoot 'lib\xbox\xapilib.lib') 'Xbox import libraries'
 
 if (!(Get-Command python.exe -ErrorAction SilentlyContinue) -and !(Get-Command python3.exe -ErrorAction SilentlyContinue)) {
-  throw 'Python 3 is required to prepare/generate dependency projects.'
+  throw 'Python 3 is required to generate dependency projects.'
 }
 $python = if (Get-Command python.exe -ErrorAction SilentlyContinue) { 'python.exe' } else { 'python3.exe' }
 
@@ -52,25 +52,6 @@ if ($missingDeps.Count -ne 0) {
   throw ('Checked-in xdk\deps-src is incomplete. This build consumes the committed dependency sources directly. Missing: ' + ($missingDeps -join ', '))
 }
 Write-Host 'Using checked-in XDK dependency sources directly.'
-
-& $python (Join-Path $here 'apply-overrides.py') --src $deps
-if ($LASTEXITCODE -ne 0) { throw 'apply-overrides.py failed.' }
-
-# The bundled dependency tree already carries some XDK fixes. apply-overrides.py
-# also inserts declarations for freshly fetched trees, which can make a second
-# identical declaration when both paths meet. Normalize those exact duplicates
-# before compiling so repeated CI runs are deterministic.
-$peerConnection = Join-Path $deps 'opennow-switch\extern\libpeer\src\peer_connection.c'
-if (Test-Path $peerConnection) {
-  $pcText = [System.IO.File]::ReadAllText($peerConnection)
-  while ($pcText.Contains("  int dtls_ret = 0;`r`n  int dtls_ret = 0;")) {
-    $pcText = $pcText.Replace("  int dtls_ret = 0;`r`n  int dtls_ret = 0;", "  int dtls_ret = 0;")
-  }
-  while ($pcText.Contains("  int dtls_ret = 0;`n  int dtls_ret = 0;")) {
-    $pcText = $pcText.Replace("  int dtls_ret = 0;`n  int dtls_ret = 0;", "  int dtls_ret = 0;")
-  }
-  [System.IO.File]::WriteAllText($peerConnection, $pcText)
-}
 
 & $python (Join-Path $here 'generate-deps-projects.py') --src $deps
 if ($LASTEXITCODE -ne 0) { throw 'generate-deps-projects.py failed.' }
