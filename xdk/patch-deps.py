@@ -129,11 +129,11 @@ def main():
     # changes processor affinity, and resumes it before reaching that barrier.
     # On Xenon this can leave a worker suspended/not runnable forever, which is
     # exactly the avcodec_open2() hang seen when thread_count > 1.  Restore the
-    # upstream worker-start semantics and let the XDK scheduler place workers.
+    # upstream slice-worker startup semantics and let the XDK scheduler place
+    # those workers.  Frame-thread affinity code is intentionally untouched.
     xb_thread = root/'xbmc360'/'libraries'/'ffmpeg'/'libavcodec'/'xb_thread.c'
     if not xb_thread.exists():
         raise SystemExit('Xbox FFmpeg thread backend not found: %s' % xb_thread)
-    replace(xb_thread, '    HANDLE hThread;\n', '')
     replace(xb_thread,
 '''        /* Xbox 360: Pin worker threads to specific hardware threads */
         hThread = pthread_getw32threadhandle_np(c->workers[i]);
@@ -145,7 +145,7 @@ def main():
            Do not suspend or retarget a pthread before it has entered worker(). */
 ''')
     xb_text = xb_thread.read_text()
-    if 'SuspendThread(hThread)' in xb_text or 'pthread_getw32threadhandle_np(c->workers[i])' in xb_text:
-        raise SystemExit('unsafe Xbox FFmpeg newborn-thread affinity block is still present')
+    if 'pthread_getw32threadhandle_np(c->workers[i])' in xb_text:
+        raise SystemExit('unsafe Xbox FFmpeg slice-worker affinity block is still present')
 
 if __name__=='__main__': main()
