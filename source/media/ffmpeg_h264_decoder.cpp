@@ -15,6 +15,10 @@ extern "C" {
 #include <cstring>
 #include <limits>
 
+extern "C" void opennow_ffmpeg_thread_log(const char* phase, int value0, int value1) {
+    ::opennow::log_message(::opennow::LogInfo, "ffmpeg-thread", "%s value0=%d value1=%d", phase ? phase : "<null>", value0, value1);
+}
+
 namespace opennow {
 namespace {
 
@@ -54,18 +58,16 @@ public:
         ctx_->flags |= AV_CODEC_FLAG_LOW_DELAY;
         ctx_->flags2 |= AV_CODEC_FLAG2_FAST;
 #endif
-        /* Xbox 360/XDK: explicitly disable FFmpeg slice threading.  The XEX
-           repeatedly hangs inside avcodec_open2() when FFmpeg 1.2 enters the
-           pthread slice-worker startup path.  FFmpeg's own thread validation
-           disables active threading when thread_count == 1, so this keeps the
-           decoder out of xb_thread.c's worker startup deterministically. */
-        const int requested_thread_count=1;
-        const int requested_thread_type=0;
+        /* Xbox 360/XDK requires parallel H.264 decode to sustain the stream.
+           Use four slice workers; xb_thread.c owns the XDK-specific worker
+           completion barrier and logs its startup/execute transitions. */
+        const int requested_thread_count=4;
+        const int requested_thread_type=FF_THREAD_SLICE;
         ctx_->thread_count=requested_thread_count;
         ctx_->thread_type=requested_thread_type;
         ctx_->skip_loop_filter=AVDISCARD_ALL;
         ctx_->width=width; ctx_->height=height;
-        ON_LOGI("video-decode","XDK deterministic decoder mode single_thread=1 slice_threads=0 frame_threads=0 low_delay=1 fast=1 skip_loop_filter=%d",(int)ctx_->skip_loop_filter);
+        ON_LOGI("video-decode","XDK decoder mode slice_threads=4 frame_threads=0 low_delay=1 fast=1 skip_loop_filter=%d",(int)ctx_->skip_loop_filter);
 #if LIBAVCODEC_VERSION_MAJOR < 55
         frame_=avcodec_alloc_frame();
 #else
@@ -79,7 +81,7 @@ public:
         if(open_rc<0){ON_LOGE("video-decode","avcodec_open2 failed rc=%d",open_rc);free_frame();free_context();return false;}
         const int caps=codec->capabilities;
         ON_LOGI("video-decode","H264 threading requested=%d type=%d actual=%d active=%d caps=0x%08x caps_slice=%d caps_frame=%d",requested_thread_count,requested_thread_type,ctx_->thread_count,ctx_->active_thread_type,(unsigned)caps,(caps&CODEC_CAP_SLICE_THREADS)?1:0,(caps&CODEC_CAP_FRAME_THREADS)?1:0);
-        if(ctx_->active_thread_type!=0){ON_LOGE("video-decode","unexpected active_thread_type=%d in forced single-thread XDK mode",ctx_->active_thread_type);free_frame();free_context();return false;}
+        if(ctx_->active_thread_type!=FF_THREAD_SLICE){ON_LOGE("video-decode","slice threading did not activate active_thread_type=%d",ctx_->active_thread_type);free_frame();free_context();return false;}
         ON_LOGI("video-decode","FFmpeg H.264 open complete threads=%d type=%d active=%d skip_loop_filter=%d",ctx_->thread_count,ctx_->thread_type,ctx_->active_thread_type,(int)ctx_->skip_loop_filter);
         return true;
     }
