@@ -95,6 +95,7 @@ void WebRtcSession::stop_workers(){
     if(video_event_){CloseHandle(video_event_);video_event_=NULL;}if(audio_event_){CloseHandle(audio_event_);audio_event_=NULL;}
 }
 void WebRtcSession::network_loop(){
+    std::uint64_t media_started=0;
     while(InterlockedCompareExchange(&workers_stop_,0,0)==0){
         bool worked=false;
         if(remote_set_){
@@ -102,7 +103,18 @@ void WebRtcSession::network_loop(){
             lock_peer();
             if(pc_){
                 for(int i=0;i<32;++i){int rc=peer_connection_loop(pc_);if(rc==0)break;worked=true;if(now_us()-began>=1000ULL)break;}
-                if(InterlockedExchange(&keyframe_pending_,0)!=0)peer_connection_request_video_keyframe(pc_);
+                const std::uint64_t now=now_us();
+                if(peer_connection_get_state(pc_)==PEER_CONNECTION_COMPLETED){
+                    if(!media_started)media_started=now;
+                    // Retry even when libpeer cannot assemble a single AU.
+                    // The network worker alone owns the PLI timer.
+                    const std::uint64_t last=video_last_packet_us_?video_last_packet_us_:media_started;
+                    if(now-last>=1500000ULL)InterlockedExchange(&keyframe_pending_,1);
+                    if((!last_pli_us_||now-last_pli_us_>=1500000ULL)&&
+                       InterlockedExchange(&keyframe_pending_,0)!=0){
+                        if(peer_connection_request_video_keyframe(pc_)>=0)last_pli_us_=now;
+                    }
+                }
             }
             unlock_peer();
         }
@@ -125,6 +137,9 @@ void WebRtcSession::video_loop(){
             EnterCriticalSection(&frame_cs_);recycle_video_frame_locked(f);LeaveCriticalSection(&frame_cs_);
             if(decode_result==VideoDecodeNoFrame)++video_decode_no_frame_;else if(decode_result==VideoDecodeError){
                 ++video_decode_failures_;
+                // Discard old frame-thread outputs before accepting recovery
+                // pictures; otherwise their delayed errors reject fresh IDRs.
+                if(decoder_)decoder_->flush();
                 EnterCriticalSection(&video_cs_);
                 video_queue_drops_+=pending_video_units_.size();clear_video_queue_locked();
                 waiting_video_keyframe_=true;
@@ -160,6 +175,7 @@ void WebRtcSession::audio_loop(){
 
 bool WebRtcSession::start(){
     ON_LOGI("webrtc","start begin target=%dx%d fps=%d ice_servers=%u",cfg_.width,cfg_.height,cfg_.fps,(unsigned)info_.ice_servers.size());
+    ON_LOGI("webrtc","stream revision=dynamic-rr-padded-recovery dynamic_mode=3 initial_kbps=%d minimum_kbps=4000 maximum_kbps=%d receiver_reports_ms=500",std::max(4000,std::max(4000,cfg_.bitrate_kbps)/4),std::max(4000,cfg_.bitrate_kbps));
     decoder_=make_ffmpeg_h264_decoder();if(!decoder_||!decoder_->open(cfg_.width,cfg_.height,cfg_.fps)){state_="H.264 software decoder init failed";ON_LOGE("webrtc","%s",state_.c_str());delete decoder_;decoder_=NULL;return false;}
     audio_decoder_=make_opus_audio_decoder();if(!audio_decoder_||!audio_decoder_->open(48000,2)){state_="Opus software decoder init failed";ON_LOGE("webrtc","%s",state_.c_str());delete audio_decoder_;audio_decoder_=NULL;delete decoder_;decoder_=NULL;return false;}
     int peer_rc=peer_init();if(peer_rc!=0){state_="libpeer initialization failed";ON_LOGE("webrtc","%s rc=%d",state_.c_str(),peer_rc);delete audio_decoder_;audio_decoder_=NULL;delete decoder_;decoder_=NULL;return false;}
@@ -257,10 +273,11 @@ void WebRtcSession::on_data(char*msg,size_t len,uint16_t sid){if(!msg||len<2)ret
 void WebRtcSession::on_open(){sctp_open_=true;ON_LOGI("datachannel","SCTP channel opened");}
 void WebRtcSession::on_close(){ON_LOGW("datachannel","SCTP channel closed");sctp_open_=false;channel_requested_=false;input_ready_=false;channel_request_us_=now_us();}
 
-void WebRtcSession::request_keyframe_async(){uint64_t n=now_us();if(last_pli_us_&&n-last_pli_us_<1500000ULL)return;last_pli_us_=n;
+void WebRtcSession::request_keyframe_async(){
 #if defined(OPENNOW_XDK)
     InterlockedExchange(&keyframe_pending_,1);
 #else
+    uint64_t n=now_us();if(last_pli_us_&&n-last_pli_us_<1500000ULL)return;last_pli_us_=n;
     if(pc_)peer_connection_request_video_keyframe(pc_);
 #endif
 }

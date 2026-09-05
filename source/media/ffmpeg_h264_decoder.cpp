@@ -20,6 +20,7 @@ extern "C" {
 #include <cstdio>
 #include <cstring>
 #include <limits>
+#include <vector>
 
 #if defined(OPENNOW_XDK)
 #include <xtl.h>
@@ -169,7 +170,17 @@ public:
         if(!ctx_||!frame_||!data||size==0||size>static_cast<std::size_t>(std::numeric_limits<int>::max())){++error_count_;return VideoDecodeError;}
         ++submitted_count_;
         if(submitted_count_==1)ON_LOGI("video-decode","first H264 access unit decode begin bytes=%u",(unsigned)size);
-        AVPacket packet;std::memset(&packet,0,sizeof(packet));packet.data=const_cast<std::uint8_t*>(data);packet.size=static_cast<int>(size);const std::uint64_t codec_began=decoder_now_us();
+        // FFmpeg's bit readers may read beyond packet.size, including on a
+        // damaged network AU. Reused queue capacity is not zero padding.
+#if LIBAVCODEC_VERSION_MAJOR < 57
+        const std::size_t padding = FF_INPUT_BUFFER_PADDING_SIZE;
+#else
+        const std::size_t padding = AV_INPUT_BUFFER_PADDING_SIZE;
+#endif
+        padded_input_.resize(size + padding);
+        std::memcpy(&padded_input_[0], data, size);
+        std::memset(&padded_input_[0] + size, 0, padding);
+        AVPacket packet;av_init_packet(&packet);packet.data=&padded_input_[0];packet.size=static_cast<int>(size);const std::uint64_t codec_began=decoder_now_us();
 #if LIBAVCODEC_VERSION_MAJOR < 57
         int got_frame=0;
         const int rc=avcodec_decode_video2(ctx_,frame_,&got_frame,&packet);
@@ -228,6 +239,7 @@ private:
         avcodec_free_context(&ctx_);
 #endif
     }
+    std::vector<std::uint8_t> padded_input_;
     AVCodecContext* ctx_;AVFrame* frame_;unsigned long long submitted_count_,decoded_count_,no_frame_count_,error_count_,codec_us_,copy_us_,codec_max_us_,copy_max_us_,over_16ms_,over_33ms_,over_50ms_,started_us_;
 };
 }

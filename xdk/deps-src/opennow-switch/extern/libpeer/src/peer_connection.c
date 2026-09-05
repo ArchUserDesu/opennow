@@ -12,6 +12,7 @@
 #include "peer_connection.h"
 #include "ports.h"
 #include "rtcp.h"
+#include "rtcp_receiver.h"
 #include "rtp.h"
 #include "sctp.h"
 #include "sdp.h"
@@ -56,6 +57,7 @@ struct PeerConnection {
   int video_has_last_nack;
   uint32_t video_nack_requests;
   uint32_t video_nack_packets_requested;
+  RtcpReceiver video_receiver;
 
   int dtls_handshake_attempts;
   uint32_t dtls_handshake_started_ms;
@@ -322,15 +324,21 @@ static int peer_connection_dtls_srtp_send(void* ctx, const uint8_t* buf, size_t 
 }
 
 static void peer_connection_incoming_rtcp(PeerConnection* pc, uint8_t* buf, size_t len) {
-  RtcpHeader* rtcp_header;
   size_t pos = 0;
 
-  while (pos < len) {
-    rtcp_header = (RtcpHeader*)(buf + pos);
-
-    switch (rtcp_header->type) {
+  while (len - pos >= 4) {
+    const uint8_t* wire=buf+pos;
+    const size_t block_size=4u*(((size_t)wire[2]<<8)|wire[3])+4u;
+    if((wire[0]>>6)!=2 || block_size>len-pos)break;
+    switch (wire[1]) {
       case RTCP_SR:
-        if (pos + 20 <= len && pc->config.onrtpsenderreport) {
+        if (block_size < 28) break;
+        if (rr_read32(wire+4)==pc->remote_vssrc) {
+          pc->video_receiver.lsr=(rr_read32(wire+8)<<16)|(rr_read32(wire+12)>>16);
+          pc->video_receiver.sr_ms=ports_get_epoch_time();
+          pc->video_receiver.have_sr=1;
+        }
+        if (pc->config.onrtpsenderreport) {
           uint32_t sender_ssrc_net, ntp_seconds_net, ntp_fraction_net, rtp_timestamp_net;
           memcpy(&sender_ssrc_net, buf + pos + 4, 4);
           memcpy(&ntp_seconds_net, buf + pos + 8, 4);
@@ -347,7 +355,7 @@ static void peer_connection_incoming_rtcp(PeerConnection* pc, uint8_t* buf, size
         break;
       case RTCP_RR:
         LOGD("RTCP_PR");
-        if (rtcp_header->rc > 0) {
+        if ((wire[0]&31) > 0) {
 // TODO: REMB, GCC ...etc
 #if 0
           RtcpRr rtcp_rr = rtcp_parse_rr(buf);
@@ -361,7 +369,7 @@ static void peer_connection_incoming_rtcp(PeerConnection* pc, uint8_t* buf, size
         }
         break;
       case RTCP_PSFB: {
-        int fmt = rtcp_header->rc;
+        int fmt = wire[0]&31;
         LOGD("RTCP_PSFB %d", fmt);
         // PLI and FIR
         if ((fmt == 1 || fmt == 4) && pc->config.on_request_keyframe) {
@@ -372,7 +380,7 @@ static void peer_connection_incoming_rtcp(PeerConnection* pc, uint8_t* buf, size
         break;
     }
 
-    pos += 4 * ntohs(rtcp_header->length) + 4;
+    pos += block_size;
   }
 }
 
@@ -638,6 +646,14 @@ int peer_connection_loop(PeerConnection* pc) {
       }
       break;
     case PEER_CONNECTION_COMPLETED:
+      if(pc->video_receiver.initialized &&
+         (uint32_t)(ports_get_epoch_time()-pc->video_receiver.report_ms)>=500) {
+        uint8_t report[128];
+        int report_size=rr_build(&pc->video_receiver,report,pc->vrtp_encoder.ssrc,
+                                pc->remote_vssrc,ports_get_epoch_time());
+        dtls_srtp_encrypt_rctp_packet(&pc->dtls_srtp,report,&report_size);
+        agent_send(&pc->agent,report,report_size);
+      }
       if ((pc->agent_ret = agent_recv(&pc->agent, pc->agent_buf, sizeof(pc->agent_buf))) > 0) {
         packet_processed = 1;
         LOGD("agent_recv %d", pc->agent_ret);
@@ -749,6 +765,7 @@ int peer_connection_loop(PeerConnection* pc) {
             }
             const uint16_t sequence =
                 (uint16_t)(((uint16_t)pc->agent_buf[2] << 8) | pc->agent_buf[3]);
+            rr_receive(&pc->video_receiver,sequence,rr_read32(pc->agent_buf+4),ports_get_epoch_time());
             peer_connection_maybe_send_video_nacks(pc, sequence);
             rtp_decoder_decode(&pc->vrtp_decoder, pc->agent_buf, pc->agent_ret);
             if (pc->completed_rtp_packets % 6000 == 0) {

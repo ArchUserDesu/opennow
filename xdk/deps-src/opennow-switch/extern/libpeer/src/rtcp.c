@@ -27,11 +27,9 @@ int rtcp_get_pli(uint8_t* packet, int len, uint32_t sender_ssrc, uint32_t media_
     return -1;
 
   memset(packet, 0, len);
-  RtcpHeader* rtcp_header = (RtcpHeader*)packet;
-  rtcp_header->version = 2;
-  rtcp_header->type = RTCP_PSFB;
-  rtcp_header->rc = 1;
-  rtcp_header->length = htons((len / 4) - 1);
+  packet[0] = 0x81;
+  packet[1] = RTCP_PSFB;
+  packet[3] = 2;
   const uint32_t network_sender_ssrc = htonl(sender_ssrc);
   const uint32_t network_media_ssrc = htonl(media_ssrc);
   memcpy(packet + 4, &network_sender_ssrc, 4);
@@ -46,11 +44,9 @@ int rtcp_get_nack(uint8_t* packet, int len, uint32_t sender_ssrc,
     return -1;
 
   memset(packet, 0, len);
-  RtcpHeader* header = (RtcpHeader*)packet;
-  header->version = 2;
-  header->type = RTCP_RTPFB;
-  header->rc = 1;
-  header->length = htons((len / 4) - 1);
+  packet[0] = 0x81;
+  packet[1] = RTCP_RTPFB;
+  packet[3] = 3;
 
   const uint32_t network_sender_ssrc = htonl(sender_ssrc);
   const uint32_t network_media_ssrc = htonl(media_ssrc);
