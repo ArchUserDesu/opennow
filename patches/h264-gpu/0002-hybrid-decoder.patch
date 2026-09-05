@@ -1,0 +1,984 @@
+From d28aa8a05b01f62a1a7ec24ae5bae288c701b5b1 Mon Sep 17 00:00:00 2001
+From: IamArchUserBtw <a_ajbar@live.concordia.ca>
+Date: Sat, 5 Sep 2026 08:05:49 -0400
+Subject: [PATCH] experiment: add bounded Xbox H264 GPU reconstruction and
+ exact validation runner
+
+---
+ experiments/h264_gpu/README.md                |  50 +++++-
+ experiments/h264_gpu/build_host.cmd           |   4 +
+ experiments/h264_gpu/build_shaders.ps1        |   6 +-
+ experiments/h264_gpu/build_xdk.ps1            |  42 +++++
+ experiments/h264_gpu/ffmpeg_bridge.c          |  74 +++++++++
+ experiments/h264_gpu/generate_fixtures.py     |  31 ++++
+ experiments/h264_gpu/host_jobs_test.cpp       |  59 +++++++
+ experiments/h264_gpu/host_shader_test.cpp     |  31 +++-
+ experiments/h264_gpu/hybrid_jobs.cpp          |  84 ++++++++++
+ experiments/h264_gpu/hybrid_jobs.h            |  51 ++++++
+ experiments/h264_gpu/shaders/reconstruct.hlsl |  22 ++-
+ experiments/h264_gpu/xdk_backend.cpp          | 146 ++++++++++++++++++
+ experiments/h264_gpu/xdk_backend.h            |  38 +++++
+ experiments/h264_gpu/xdk_validate.cpp         |  95 ++++++++++++
+ .../libraries/ffmpeg/libavcodec/h264.c        |  21 +++
+ 15 files changed, 738 insertions(+), 16 deletions(-)
+ create mode 100644 experiments/h264_gpu/build_xdk.ps1
+ create mode 100644 experiments/h264_gpu/ffmpeg_bridge.c
+ create mode 100644 experiments/h264_gpu/generate_fixtures.py
+ create mode 100644 experiments/h264_gpu/host_jobs_test.cpp
+ create mode 100644 experiments/h264_gpu/hybrid_jobs.cpp
+ create mode 100644 experiments/h264_gpu/hybrid_jobs.h
+ create mode 100644 experiments/h264_gpu/xdk_backend.cpp
+ create mode 100644 experiments/h264_gpu/xdk_backend.h
+ create mode 100644 experiments/h264_gpu/xdk_validate.cpp
+
+diff --git a/experiments/h264_gpu/README.md b/experiments/h264_gpu/README.md
+index 369473d..e1d9d11 100644
+--- a/experiments/h264_gpu/README.md
++++ b/experiments/h264_gpu/README.md
+@@ -1,7 +1,8 @@
+ # Unwired H.264 reconstruction experiment
+ 
+-This directory is a standalone lab, not an application decoder. Do not add it
+-to the production project until the root GPU milestone gates are complete.
++This directory contains a standalone experimental hybrid decoder and its
++kernel tests. It is not wired into the application. Production integration
++requires exact Xbox frame comparisons and hardware performance measurements.
+ The shader source is new experimental implementation, with the pinned LGPL
+ FFmpeg kernels used as a separate test oracle. Generated oracle files preserve
+ upstream notices and record source hashes; they are not shipped in the patch.
+@@ -32,7 +33,44 @@ quantized and include FFmpeg's DC processing. 8x8 transforms need 8-aligned
+ plane extents. Interpolation clamping uses coded picture borders, not display
+ crop borders. The driver must validate every job before submission.
+ 
+-Not implemented here: bitstream extraction, intra reconstruction, in-loop
+-deblocking, DPB management, frame-thread integration or automatic CPU fallback.
+-R32F is a correctness prototype, not a bandwidth-optimized production format.
+-No throughput claim follows from shader compiler timing estimates.
++The optional `OPENNOW_GPU_RECON_EXPERIMENT` hooks in the pinned `h264.c` submit
++progressive 8-bit 4:2:0 unweighted list-0 16x16 inter macroblocks with 4x4
++transforms. FFmpeg retains parsing, entropy decoding, intra reconstruction,
++deblocking and the DPB. All other macroblocks run through the original CPU
++decoder. A maximum of 80 jobs is flushed before CPU reconstruction, row
++filtering and slice/error handling. GPU failures replay the entire batch on
++CPU using untouched CPU reference pictures. No quality setting is lowered.
++
++The Xbox backend uses native L8 reference planes and R32F coefficient,
++intermediate, residual and output atlases. It uploads reference planes once
++per picture/cache entry and reads back reconstructed batches before CPU
++dependencies continue. This avoids introducing a frame queue, but readback
++waits and small batches may outweigh GPU savings. The experiment uses one
++decoder thread and owns its D3D device; application device sharing and frame
++threading are not implemented. No throughput benefit has been established.
++
++Build the standalone Xbox comparison executable:
++
++```
++powershell -NoProfile -ExecutionPolicy Bypass -File experiments/h264_gpu/build_xdk.ps1 -Repo C:\absolute\path\to\opennow
++python -m pip install --target experiments/h264_gpu/build/tools imageio-ffmpeg
++python experiments/h264_gpu/generate_fixtures.py
++```
++
++`build_xdk.ps1` must run from an isolated checkout with the staged `h264.c`
++hook changes. `-Repo` supplies the existing pinned headers and built FFmpeg
++libraries. Together with `build_shaders.ps1`, it creates `gpu_validate.xex`
++and shaders in this directory's ignored `build` folder. Nothing is deployed.
++
++For an authorized hardware run, put the standalone XEX, `idct4_columns_ps.xpu`,
++`residual4_rows_ps.xpu`, `luma_batch_ps.xpu`, `chroma_batch_ps.xpu` and
++`gpu-fixture.h264` in a separate directory and launch that XEX. Read
++`gpu-validation.log` afterward. Repeat with the mixed fixture renamed to
++`gpu-fixture.h264`. Each fixture contains 180 720p frames at 60 fps; hashes
++are recorded in `build/fixtures.json`. Never replace the application XEX to
++run this test. A pass requires exact visible YUV output from the full pinned
++CPU decoder, actual GPU jobs, and no backend failures. A compiler success or
++Windows WARP pass is not Xbox validation. The runner compares single-thread
++CPU/hybrid timings; production decisions additionally need the current app's
++thread configuration, varied real streams, latency distributions and sustained
++thermal/network workloads. A pixel pass alone does not meet that gate.
+diff --git a/experiments/h264_gpu/build_host.cmd b/experiments/h264_gpu/build_host.cmd
+index 227b881..6132b1e 100644
+--- a/experiments/h264_gpu/build_host.cmd
++++ b/experiments/h264_gpu/build_host.cmd
+@@ -11,4 +11,8 @@ if errorlevel 1 exit /b 1
+ cl /nologo /O2 /std:c++17 /EHsc /W3 /wd4244 /wd4309 host_shader_test.cpp build\oracle.cpp /Fobuild\ /Febuild\host_shader_test.exe /link d3d11.lib d3dcompiler.lib dxgi.lib
+ if errorlevel 1 exit /b 1
+ build\host_shader_test.exe shaders\reconstruct.hlsl
++if errorlevel 1 exit /b 1
++cl /nologo /O2 /std:c++17 /EHsc /W3 /wd4244 /wd4309 host_jobs_test.cpp hybrid_jobs.cpp build\oracle.cpp /Fobuild\ /Febuild\host_jobs_test.exe
++if errorlevel 1 exit /b 1
++build\host_jobs_test.exe
+ exit /b %errorlevel%
+diff --git a/experiments/h264_gpu/build_shaders.ps1 b/experiments/h264_gpu/build_shaders.ps1
+index bca9657..be8630b 100644
+--- a/experiments/h264_gpu/build_shaders.ps1
++++ b/experiments/h264_gpu/build_shaders.ps1
+@@ -3,8 +3,10 @@ $ErrorActionPreference='Stop'
+ $out=Join-Path $PSScriptRoot 'build'
+ New-Item -ItemType Directory -Force $out | Out-Null
+ $fxc=Join-Path $XdkRoot 'bin\win32\fxc.exe'
+-foreach($entry in @('luma_ps','chroma_ps','idct4_ps','idct4_columns_ps','idct4_rows_ps','idct8_columns_ps','idct8_rows_ps')) {
+-    & $fxc /nologo /T ps_3_0 /E $entry /Fo (Join-Path $out ($entry+'.xpu')) /Fc (Join-Path $out ($entry+'.asm')) (Join-Path $PSScriptRoot 'shaders\reconstruct.hlsl')
++foreach($entry in @('luma_ps','chroma_ps','idct4_ps','idct4_columns_ps','idct4_rows_ps','idct8_columns_ps','idct8_rows_ps','residual4_rows_ps','luma_batch_ps','chroma_batch_ps')) {
++    $defines=@()
++    if($entry -like '*batch*'){$defines=@('/D','GPU_REFERENCE_UNORM=1')}
++    & $fxc /nologo /T ps_3_0 /E $entry @defines /Fo (Join-Path $out ($entry+'.xpu')) /Fc (Join-Path $out ($entry+'.asm')) (Join-Path $PSScriptRoot 'shaders\reconstruct.hlsl')
+     if($LASTEXITCODE -ne 0){throw "XDK shader compilation failed: $entry"}
+ }
+ Write-Output 'PASS: Xbox shader compilation only; no Xbox execution'
+diff --git a/experiments/h264_gpu/build_xdk.ps1 b/experiments/h264_gpu/build_xdk.ps1
+new file mode 100644
+index 0000000..07cb926
+--- /dev/null
++++ b/experiments/h264_gpu/build_xdk.ps1
+@@ -0,0 +1,42 @@
++param([Parameter(Mandatory=$true)][string]$Repo,[string]$XdkRoot='C:\Program Files (x86)\Microsoft Xbox 360 SDK')
++$ErrorActionPreference='Stop'
++$lab=(Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
++$repoPath=(Resolve-Path $Repo).Path
++$ff=Join-Path $repoPath 'xdk\deps-src\xbmc360\libraries\ffmpeg'
++$out=Join-Path $PSScriptRoot 'build'
++New-Item -ItemType Directory -Force $out | Out-Null
++$env:PATH=(Join-Path $XdkRoot 'bin\win32')+';'+$env:PATH
++$env:INCLUDE=(Join-Path $XdkRoot 'include\xbox')+';'+(Join-Path $XdkRoot 'include\xbox\sys')
++$env:LIB=(Join-Path $XdkRoot 'lib\xbox')
++$cl=Join-Path $XdkRoot 'bin\win32\cl.exe'
++function Checked([string]$exe,[string[]]$arguments){
++    $saved=$ErrorActionPreference;$ErrorActionPreference='Continue'
++    & $exe @arguments 2>&1 | ForEach-Object {Write-Output "$_"}
++    $rc=$LASTEXITCODE;$ErrorActionPreference=$saved
++    if($rc -ne 0){throw "Tool failed ($rc): $exe"}
++}
++$common=@('/nologo','/c','/O2','/Oi','/MT','/GS-','/W3','/D_XBOX','/DWIN32','/DHAVE_AV_CONFIG_H','/DOPENNOW_GPU_RECON_EXPERIMENT',"/I$ff",("/I"+(Join-Path $ff 'vcproj\external\include')),"/I$PSScriptRoot")
++$common+=("/I"+(Join-Path $ff 'libavcodec'))
++$sources=@(
++    @{Path=(Join-Path $lab 'xdk\deps-src\xbmc360\libraries\ffmpeg\libavcodec\h264.c');Name='h264_gpu';C=$true},
++    @{Path=(Join-Path $PSScriptRoot 'ffmpeg_bridge.c');Name='ffmpeg_bridge';C=$true},
++    @{Path=(Join-Path $PSScriptRoot 'hybrid_jobs.cpp');Name='hybrid_jobs';C=$false},
++    @{Path=(Join-Path $PSScriptRoot 'xdk_backend.cpp');Name='xdk_backend';C=$false},
++    @{Path=(Join-Path $PSScriptRoot 'xdk_validate.cpp');Name='xdk_validate';C=$false})
++$objects=@()
++foreach($source in $sources){
++    $obj=Join-Path $out ($source.Name+'.obj');$args=$common
++    if($source.C){$args+=@('/TC','/FIlibavutil/intmath.h','/FIconfig.h')}
++    else{$args+=@('/EHsc')}
++    Checked $cl ($args+@("/Fo$obj",$source.Path));$objects+=$obj
++}
++$pe=Join-Path $out 'gpu_validate.pe'
++$link=@('/nologo','/XEX:NO',"/OUT:$pe",("/PDB:"+(Join-Path $out 'gpu_validate.xdb')))
++$link+=$objects
++$link+=("/LIBPATH:"+(Join-Path $repoPath 'xdk\lib\Release'))
++$link+=@('libavcodec.lib','libavutil.lib','pthreads.lib','d3d9.lib','d3dx9.lib','xgraphics.lib','xapilib.lib','xmcore.lib','xbdm.lib','xboxkrnl.lib','xnet.lib')
++Checked (Join-Path $XdkRoot 'bin\win32\link.exe') $link
++$config=Join-Path $out 'gpu_validate.xml'
++'<?xml version="1.0"?><xex><titleid id="0x4F4E0002"/><privilege id="0"/></xex>' | Set-Content -Encoding ASCII $config
++Checked (Join-Path $XdkRoot 'bin\win32\imagexex.exe') @("/IN:$pe",("/OUT:"+(Join-Path $out 'gpu_validate.xex')),"/CONFIG:$config")
++Write-Output 'Built isolated gpu_validate.xex. No production build or remote deployment performed.'
+diff --git a/experiments/h264_gpu/ffmpeg_bridge.c b/experiments/h264_gpu/ffmpeg_bridge.c
+new file mode 100644
+index 0000000..11c2601
+--- /dev/null
++++ b/experiments/h264_gpu/ffmpeg_bridge.c
+@@ -0,0 +1,74 @@
++/* Experimental private bridge to the pinned FFmpeg 1.2 H264Context.
++ * Compile only in the isolated GPU build. CPU fallback retains all syntax
++ * outside the deliberately narrow accelerated macroblock subset. */
++#include "libavcodec/h264.h"
++#include "hybrid_jobs.h"
++#include <string.h>
++
++static XenonH264Bridge* bridge_for(H264Context* h){
++    XenonH264Bridge* b=(XenonH264Bridge*)h->avctx->opaque;
++    if(!b||b->magic!=0x58483236||h->avctx->thread_count>1)return NULL;
++    return b;
++}
++void ff_xenon_h264_barrier(H264Context* h){xenon_h264_bridge_flush(bridge_for(h));}
++
++int ff_xenon_h264_submit(H264Context* h){
++    XenonH264Bridge* b=bridge_for(h);
++    const int mb_type=h->cur_pic.f.mb_type[h->mb_xy];
++    XenonH264Job* j;
++    Picture* ref;
++    int plane,block,x,y,index;
++    DECLARE_ALIGNED(16,int16_t,coeff)[768];
++    if(!b)return 0;
++    /* No approximation: every unsupported MB executes the original decoder
++       after pending GPU pixels have been returned to CPU memory. */
++    if(h->pixel_shift||h->sps.chroma_format_idc!=1||FRAME_MBAFF||FIELD_PICTURE||
++       h->is_complex||h->qscale==0||h->use_weight||!IS_INTER(mb_type)||
++       !IS_16X16(mb_type)||IS_8x8DCT(mb_type)||!IS_DIR(mb_type,0,0)||IS_DIR(mb_type,0,1)||
++       h->mb_width*16>XENON_H264_WIDTH_MAX||h->mb_height*16>720||h->avctx->codec_id!=AV_CODEC_ID_H264)return 0;
++    index=h->ref_cache[0][scan8[0]];
++    if(index<0||index>=h->ref_count[0])return 0;
++    ref=&h->ref_list[0][index];
++    if(!ref->f.data[0]||!ref->f.data[1]||!ref->f.data[2])return 0;
++    if(!b->have_picture||b->picture_number!=h->cur_pic.f.coded_picture_number){
++        xenon_h264_bridge_flush(b);
++        b->picture_number=h->cur_pic.f.coded_picture_number;b->have_picture=1;
++        if(b->backend.begin_picture)b->backend.begin_picture(b->backend.opaque,b->picture_number);
++    }
++    if(b->count==XENON_H264_BATCH_MAX)xenon_h264_bridge_flush(b);
++    j=&b->jobs[b->count];memset(j,0,sizeof(*j));
++    j->width=h->mb_width*16;j->height=h->mb_height*16;
++    j->mb_x=h->mb_x;j->mb_y=h->mb_y;
++    j->mv_x=h->mv_cache[0][scan8[0]][0];j->mv_y=h->mv_cache[0][scan8[0]][1];
++    memcpy(coeff,h->mb,sizeof(coeff));
++    if(h->cbp&0x30){
++        if(h->non_zero_count_cache[scan8[CHROMA_DC_BLOCK_INDEX]])
++            h->h264dsp.h264_chroma_dc_dequant_idct(coeff+256,h->dequant4_coeff[4][h->chroma_qp[0]][0]);
++        if(h->non_zero_count_cache[scan8[CHROMA_DC_BLOCK_INDEX+1]])
++            h->h264dsp.h264_chroma_dc_dequant_idct(coeff+512,h->dequant4_coeff[5][h->chroma_qp[1]][0]);
++    }
++    for(plane=0;plane<3;++plane){
++        const int side=plane?8:16;
++        const int stride=plane?h->uvlinesize:h->linesize;
++        int16_t* output=j->coefficients+(plane?256+(plane-1)*64:0);
++        j->reference[plane]=ref->f.data[plane];j->reference_stride[plane]=ref->f.linesize[plane];
++        j->destination_stride[plane]=stride;
++        j->destination[plane]=h->cur_pic.f.data[plane]+h->mb_y*side*stride+h->mb_x*side;
++        for(block=0;block<(plane?4:16);++block){
++            const int source_block=plane*16+block;
++            const int cache=scan8[source_block];
++            const int block_x=plane?(block&1)*4:((scan8[block]-scan8[0])&7)*4;
++            const int block_y=plane?(block>>1)*4:((scan8[block]-scan8[0])>>3)*4;
++            const int coded=plane?(h->cbp&0x30)&&(h->non_zero_count_cache[cache]||coeff[source_block*16]):
++                                  (h->cbp&15)&&h->non_zero_count_cache[cache];
++            /* FFmpeg's DC-only fast path adds rounding in int32, whereas
++               its generic transform stores the rounded DC in int16. */
++            if(coded&&h->non_zero_count_cache[cache]<=1&&coeff[source_block*16]>32735)return 0;
++            if(coded)for(y=0;y<4;++y)for(x=0;x<4;++x)
++                output[(block_y+y)*side+block_x+x]=coeff[source_block*16+y*4+x];
++        }
++    }
++    h->list_counts[h->mb_xy]=h->list_count;
++    memset(h->mb,0,sizeof(h->mb));
++    ++b->count;return 1;
++}
+diff --git a/experiments/h264_gpu/generate_fixtures.py b/experiments/h264_gpu/generate_fixtures.py
+new file mode 100644
+index 0000000..f12fa09
+--- /dev/null
++++ b/experiments/h264_gpu/generate_fixtures.py
+@@ -0,0 +1,31 @@
++"""Generate deterministic local fixtures; never contacts the Xbox."""
++import hashlib
++import json
++from pathlib import Path
++import subprocess
++import sys
++
++root = Path(__file__).resolve().parent
++sys.path.insert(0, str(root / "build" / "tools"))
++import imageio_ffmpeg
++
++ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
++out = root / "build"
++out.mkdir(exist_ok=True)
++manifest = {"encoder": subprocess.check_output([ffmpeg, "-version"], text=True).splitlines()[0], "fixtures": []}
++for name, options in [
++    ("gpu-fixture.h264", "partitions=none:8x8dct=0:weightp=0:bframes=0:ref=4"),
++    ("gpu-fixture-mixed.h264", "partitions=all:8x8dct=1:weightp=0:bframes=2:ref=4"),
++]:
++    path = out / name
++    args = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
++            "testsrc2=size=1280x720:rate=60", "-frames:v", "180", "-an", "-pix_fmt", "yuv420p",
++            "-c:v", "libx264", "-threads", "1", "-preset", "fast", "-crf", "22",
++            "-x264-params", options + ":keyint=60:min-keyint=60:scenecut=0", "-f", "h264", str(path)]
++    subprocess.run(args, check=True)
++    data = path.read_bytes()
++    assert 0 < len(data) <= 16 * 1024 * 1024
++    manifest["fixtures"].append({"file": name, "sha256": hashlib.sha256(data).hexdigest(),
++                                 "bytes": len(data), "frames": 180, "options": options})
++(out / "fixtures.json").write_text(json.dumps(manifest, indent=2) + "\n")
++print(json.dumps(manifest, indent=2))
+diff --git a/experiments/h264_gpu/host_jobs_test.cpp b/experiments/h264_gpu/host_jobs_test.cpp
+new file mode 100644
+index 0000000..2f2651b
+--- /dev/null
++++ b/experiments/h264_gpu/host_jobs_test.cpp
+@@ -0,0 +1,59 @@
++// Exact replay tests against the pinned FFmpeg oracle. Host only.
++#include "hybrid_jobs.h"
++#include <cstdio>
++#include <cstring>
++#include <cstdlib>
++extern "C" void oracle_qpel(unsigned char*,unsigned char*,int,int,int);
++extern "C" void oracle_idct4(unsigned char*,short*,int);
++static unsigned seed=71231;
++static unsigned random32(){seed=seed*1664525u+1013904223u;return seed;}
++static int clamp(int n,int hi){return n<0?0:n>hi?hi:n;}
++static int divfloor(int n,int d){return n>=0?n/d:-((-n+d-1)/d);}
++static int fail_after_write(void*,const XenonH264Job* j,unsigned n){
++    for(unsigned i=0;i<n;++i)memset(j[i].destination[0],0xee,16);return 0;
++}
++int main(){
++    unsigned long long checked=0;
++    static XenonH264Bridge bridge;
++    for(int test=0;test<2048;++test){
++        unsigned char ref[3][32*32],actual[3][32*32],expected[3][32*32];
++        XenonH264Job j={};j.width=j.height=32;j.mb_x=(test>>2)&1;j.mb_y=(test>>3)&1;
++        j.mv_x=(int)(random32()%97)-48;j.mv_y=(int)(random32()%97)-48;
++        memset(actual,0xa5,sizeof(actual));memset(expected,0xa5,sizeof(expected));
++        for(int p=0;p<3;++p){
++            const int side=p?8:16,w=p?16:32,unit=p?8:4;
++            for(int i=0;i<32*32;++i)ref[p][i]=(unsigned char)(random32()>>24);
++            j.reference[p]=ref[p];j.reference_stride[p]=32;j.destination[p]=actual[p];j.destination_stride[p]=32;
++            const int dx=divfloor(j.mv_x,unit),dy=divfloor(j.mv_y,unit),fx=j.mv_x-dx*unit,fy=j.mv_y-dy*unit;
++            if(!p){
++                unsigned char padded[64*64],result[64*64]={};
++                for(int y=0;y<64;++y)for(int x=0;x<64;++x)
++                    padded[y*64+x]=ref[p][clamp(j.mb_y*side+dy+y-16,w-1)*32+clamp(j.mb_x*side+dx+x-16,w-1)];
++                for(int y=0;y<side;y+=4)for(int x=0;x<side;x+=4)
++                    oracle_qpel(result+y*64+x,padded+(16+y)*64+16+x,64,fx,fy);
++                for(int y=0;y<side;++y)memcpy(expected[p]+y*32,result+y*64,side);
++            }else for(int y=0;y<side;++y)for(int x=0;x<side;++x){
++                int sx=j.mb_x*side+dx+x,sy=j.mb_y*side+dy+y;
++                int a=ref[p][clamp(sy,w-1)*32+clamp(sx,w-1)],b=ref[p][clamp(sy,w-1)*32+clamp(sx+1,w-1)];
++                int c=ref[p][clamp(sy+1,w-1)*32+clamp(sx,w-1)],d=ref[p][clamp(sy+1,w-1)*32+clamp(sx+1,w-1)];
++                expected[p][y*32+x]=(unsigned char)(((8-fx)*(8-fy)*a+fx*(8-fy)*b+(8-fx)*fy*c+fx*fy*d+32)/64);
++            }
++            short* atlas=j.coefficients+(p?256+(p-1)*64:0);
++            for(int by=0;by<side;by+=4)for(int bx=0;bx<side;bx+=4){short coeff[16];
++                for(int y=0;y<4;++y)for(int x=0;x<4;++x){
++                    short v=test<1024?(short)((int)(random32()%2048)-1024):(short)(random32()>>16);
++                    coeff[y*4+x]=atlas[(by+y)*side+bx+x]=v;
++                }
++                oracle_idct4(expected[p]+by*32+bx,coeff,32);
++            }
++        }
++        XenonH264Backend backend={};backend.execute=fail_after_write;
++        xenon_h264_bridge_init(&bridge,test&1?&backend:NULL);bridge.jobs[0]=j;bridge.count=1;
++        xenon_h264_bridge_flush(&bridge);xenon_h264_bridge_flush(&bridge);
++        if(bridge.count||bridge.cpu_jobs!=1||bridge.gpu_jobs||bridge.batches!=1||bridge.backend_failures!=(unsigned)(test&1))return 2;
++        if(memcmp(actual,expected,sizeof(actual))){fprintf(stderr,"FAIL replay case %d motion %d,%d\n",test,j.mv_x,j.mv_y);return 1;}
++        checked+=384;
++    }
++    printf("PASS: %llu exact CPU replay pixels, negative motion, padded strides, int16 extremes, partial-backend-failure replay (host only)\n",checked);
++    return 0;
++}
+diff --git a/experiments/h264_gpu/host_shader_test.cpp b/experiments/h264_gpu/host_shader_test.cpp
+index df9e4cc..968d466 100644
+--- a/experiments/h264_gpu/host_shader_test.cpp
++++ b/experiments/h264_gpu/host_shader_test.cpp
+@@ -21,7 +21,7 @@ static void check(HRESULT hr,const char* what) {
+     if(FAILED(hr)){char b[256];sprintf_s(b,"%s failed HRESULT=0x%08x",what,(unsigned)hr);throw std::runtime_error(b);}
+ }
+ static ComPtr<ID3DBlob> compile(const wchar_t* file,const char* entry,const char* profile) {
+-    D3D_SHADER_MACRO defines[]={{"GPU_HOST","1"},{nullptr,nullptr}};
++    D3D_SHADER_MACRO defines[]={{"GPU_HOST","1"},{strstr(entry,"batch")?"GPU_REFERENCE_UNORM":nullptr,"1"},{nullptr,nullptr}};
+     ComPtr<ID3DBlob> code,errors;
+     HRESULT hr=D3DCompileFromFile(file,defines,D3D_COMPILE_STANDARD_FILE_INCLUDE,entry,profile,
+                                 D3DCOMPILE_IEEE_STRICTNESS|D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&code,&errors);
+@@ -36,22 +36,29 @@ class Harness {
+     ComPtr<ID3D11RenderTargetView> target;
+     ComPtr<ID3D11Buffer> constants;
+     ComPtr<ID3D11VertexShader> vertex;
++    ComPtr<ID3D11Texture2D> normalized;
++    ComPtr<ID3D11ShaderResourceView> normalizedView;
++    bool useNormalized=false;
+ public:
+-    ComPtr<ID3D11PixelShader> luma,chroma,idct4,idct4Columns,idct4Rows,idct8Columns,idct8Rows;
++    ComPtr<ID3D11PixelShader> luma,chroma,idct4,idct4Columns,idct4Rows,idct8Columns,idct8Rows,residualRows,lumaBatch,chromaBatch;
+     Harness(const wchar_t* shader) {
+         D3D_FEATURE_LEVEL level;
+         check(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,
+                                &device,&level,&context),"D3D11 WARP device");
+-        const char* vs="struct O{float4 p:SV_Position;float2 uv:TEXCOORD0;};O main(uint id:SV_VertexID){O o;float2 uv=id==0?float2(0,0):id==1?float2(2,0):float2(0,2);o.p=float4(uv.x*2-1,1-uv.y*2,0,1);o.uv=uv;return o;}";
++        const char* vs="cbuffer P:register(b0){float4 dimensions,motion,weights,control;}struct O{float4 p:SV_Position;float2 uv:TEXCOORD0;float4 mv:TEXCOORD1;};O main(uint id:SV_VertexID){O o;float2 uv=id==0?float2(0,0):id==1?float2(2,0):float2(0,2);o.p=float4(uv.x*2-1,1-uv.y*2,0,1);o.uv=uv;o.mv=motion;return o;}";
+         ComPtr<ID3DBlob> code;
+         check(D3DCompile(vs,strlen(vs),nullptr,nullptr,nullptr,"main","vs_5_0",0,0,&code,nullptr),"vertex compile");
+         check(device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&vertex),"vertex create");
+-        const char* entries[]={"luma_ps","chroma_ps","idct4_ps","idct4_columns_ps","idct4_rows_ps","idct8_columns_ps","idct8_rows_ps"};
+-        ComPtr<ID3D11PixelShader>* shaders[]={&luma,&chroma,&idct4,&idct4Columns,&idct4Rows,&idct8Columns,&idct8Rows};
+-        for(int i=0;i<7;++i){code=compile(shader,entries[i],"ps_5_0");check(device->CreatePixelShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,shaders[i]->GetAddressOf()),"pixel create");}
++        const char* entries[]={"luma_ps","chroma_ps","idct4_ps","idct4_columns_ps","idct4_rows_ps","idct8_columns_ps","idct8_rows_ps","residual4_rows_ps","luma_batch_ps","chroma_batch_ps"};
++        ComPtr<ID3D11PixelShader>* shaders[]={&luma,&chroma,&idct4,&idct4Columns,&idct4Rows,&idct8Columns,&idct8Rows,&residualRows,&lumaBatch,&chromaBatch};
++        for(int i=0;i<10;++i){code=compile(shader,entries[i],"ps_5_0");check(device->CreatePixelShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,shaders[i]->GetAddressOf()),"pixel create");}
+         D3D11_TEXTURE2D_DESC td={};td.Width=N;td.Height=N;td.MipLevels=td.ArraySize=1;
+         td.Format=DXGI_FORMAT_R32_FLOAT;td.SampleDesc.Count=1;td.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+         for(int i=0;i<3;++i){check(device->CreateTexture2D(&td,nullptr,&inputs[i]),"input texture");check(device->CreateShaderResourceView(inputs[i].Get(),nullptr,&views[i]),"input view");}
++        td.Format=DXGI_FORMAT_R8_UNORM;
++        check(device->CreateTexture2D(&td,nullptr,&normalized),"native byte reference");
++        check(device->CreateShaderResourceView(normalized.Get(),nullptr,&normalizedView),"native byte view");
++        td.Format=DXGI_FORMAT_R32_FLOAT;
+         td.BindFlags=D3D11_BIND_RENDER_TARGET;
+         check(device->CreateTexture2D(&td,nullptr,&output),"output texture");
+         check(device->CreateRenderTargetView(output.Get(),nullptr,&target),"render target");
+@@ -67,10 +74,15 @@ public:
+     void upload(int slot,const std::vector<float>& data) {
+         context->UpdateSubresource(inputs[slot].Get(),0,nullptr,data.data(),N*sizeof(float),0);
+     }
++    void nativeReference(const std::vector<float>& data,bool enable){
++        useNormalized=enable;
++        if(enable){std::vector<unsigned char> bytes(data.begin(),data.end());context->UpdateSubresource(normalized.Get(),0,nullptr,bytes.data(),N,0);}
++    }
+     void draw(ID3D11PixelShader* shader,const Params& p) {
+         context->UpdateSubresource(constants.Get(),0,nullptr,&p,0,0);
+         ID3D11Buffer* cb=constants.Get();context->PSSetConstantBuffers(0,1,&cb);
+-        ID3D11ShaderResourceView* srv[]={views[0].Get(),views[1].Get(),views[2].Get()};
++        context->VSSetConstantBuffers(0,1,&cb);
++        ID3D11ShaderResourceView* srv[]={useNormalized?normalizedView.Get():views[0].Get(),views[1].Get(),views[2].Get()};
+         context->PSSetShaderResources(0,3,srv);context->PSSetShader(shader,nullptr,0);context->Draw(3,0);
+         ID3D11ShaderResourceView* empty[3]={};context->PSSetShaderResources(0,3,empty);
+     }
+@@ -147,6 +159,7 @@ int wmain(int argc,wchar_t** argv) {
+                             expected[i]=(unsigned char)clip(v+(int)r[i]);
+                         }
+                         gpu.compare(type?gpu.chroma.Get():gpu.luma.Get(),p,expected,type?"chroma":"luma");comparisons+=N*N;
++                        if(mode==0){gpu.nativeReference(a,true);gpu.compare(type?gpu.chromaBatch.Get():gpu.lumaBatch.Get(),p,expected,"native byte batch");gpu.nativeReference(a,false);}
+                     }
+                 }
+             }
+@@ -160,6 +173,9 @@ int wmain(int argc,wchar_t** argv) {
+             }
+             gpu.upload(0,a);gpu.upload(2,r);gpu.compare(gpu.idct4.Get(),p,expected,"idct4");
+             gpu.intermediate(gpu.idct4Columns.Get(),p);gpu.compare(gpu.idct4Rows.Get(),p,expected,"idct4 two-pass");
++            gpu.intermediate(gpu.residualRows.Get(),p);
++            p.motion[0]=p.motion[1]=0;
++            gpu.nativeReference(a,true);gpu.compare(gpu.lumaBatch.Get(),p,expected,"native byte transform/residual/reconstruct");gpu.nativeReference(a,false);
+             for(int i=0;i<N*N;++i)expected[i]=(unsigned char)a[i];
+             for(int y=0;y<N;y+=8)for(int x=0;x<N;x+=8){short c[64];
+                 for(int j=0;j<8;++j)for(int i=0;i<8;++i)c[j*8+i]=(short)r[(y+j)*N+x+i];
+@@ -168,6 +184,7 @@ int wmain(int argc,wchar_t** argv) {
+             gpu.upload(2,r);gpu.intermediate(gpu.idct8Columns.Get(),p);gpu.compare(gpu.idct8Rows.Get(),p,expected,"idct8 two-pass");
+         }
+         puts("PASS: 196608 exact 4x4/8x8 inverse-transform shader comparisons against pinned FFmpeg, including two-pass execution and int16 extremes (host only)");
++        puts("PASS: 720896 native R8 reference/batch and transform-to-reconstruction shader pixel comparisons (host only)");
+         return 0;
+     }catch(const std::exception& e){fprintf(stderr,"FAIL: %s\n",e.what());return 1;}
+ }
+diff --git a/experiments/h264_gpu/hybrid_jobs.cpp b/experiments/h264_gpu/hybrid_jobs.cpp
+new file mode 100644
+index 0000000..c1f831c
+--- /dev/null
++++ b/experiments/h264_gpu/hybrid_jobs.cpp
+@@ -0,0 +1,84 @@
++#include "hybrid_jobs.h"
++#include <string.h>
++
++namespace {
++int clip(int n){return n<0?0:n>255?255:n;}
++int floor_div(int n,int d){return n>=0?n/d:-((-n+d-1)/d);}
++int pixel(const uint8_t* p,int stride,int w,int h,int x,int y){
++    x=x<0?0:x>=w?w-1:x;y=y<0?0:y>=h?h-1:y;return p[y*stride+x];
++}
++int filter(const uint8_t* p,int stride,int w,int h,int x,int y,int dx,int dy){
++    static const int taps[6]={1,-5,20,20,-5,1};int sum=0;
++    for(int i=0;i<6;++i)sum+=taps[i]*pixel(p,stride,w,h,x+(i-2)*dx,y+(i-2)*dy);
++    return sum;
++}
++int luma(const uint8_t* p,int stride,int w,int h,int x,int y,int fx,int fy){
++    int a=pixel(p,stride,w,h,x,y);
++    if(!fx&&!fy)return a;
++    int horizontal=clip(floor_div(filter(p,stride,w,h,x,y,1,0)+16,32));
++    int vertical=clip(floor_div(filter(p,stride,w,h,x,y,0,1)+16,32));
++    if(!fy)return fx==2?horizontal:(horizontal+pixel(p,stride,w,h,x+(fx==3),y)+1)/2;
++    if(!fx)return fy==2?vertical:(vertical+pixel(p,stride,w,h,x,y+(fy==3))+1)/2;
++    if((fx&1)&&(fy&1)){
++        int hh=clip(floor_div(filter(p,stride,w,h,x,y+(fy==3),1,0)+16,32));
++        int vv=clip(floor_div(filter(p,stride,w,h,x+(fx==3),y,0,1)+16,32));
++        return(hh+vv+1)/2;
++    }
++    static const int taps[6]={1,-5,20,20,-5,1};int diagonal=0;
++    for(int i=0;i<6;++i)diagonal+=taps[i]*filter(p,stride,w,h,x,y+i-2,1,0);
++    diagonal=clip(floor_div(diagonal+512,1024));
++    if(fx==2&&fy==2)return diagonal;
++    if(fx==2){int hh=clip(floor_div(filter(p,stride,w,h,x,y+(fy==3),1,0)+16,32));return(diagonal+hh+1)/2;}
++    int vv=clip(floor_div(filter(p,stride,w,h,x+(fx==3),y,0,1)+16,32));return(diagonal+vv+1)/2;
++}
++void transform(const int c[4],int v[4]){
++    int even0=c[0]+c[2],even1=c[0]-c[2];
++    int odd0=floor_div(c[1],2)-c[3],odd1=c[1]+floor_div(c[3],2);
++    v[0]=even0+odd1;v[1]=even1+odd0;v[2]=even1-odd0;v[3]=even0-odd1;
++}
++void residual4(const int16_t* src,int pitch,int result[16]){
++    int16_t intermediate[16];
++    for(int x=0;x<4;++x){int c[4],v[4];for(int y=0;y<4;++y)c[y]=src[y*pitch+x];
++        if(!x)c[0]=(int16_t)(c[0]+32);
++        transform(c,v);for(int y=0;y<4;++y)intermediate[y*4+x]=(int16_t)v[y];
++    }
++    for(int x=0;x<4;++x){int c[4],v[4];for(int y=0;y<4;++y)c[y]=intermediate[x*4+y];
++        transform(c,v);for(int y=0;y<4;++y)result[y*4+x]=floor_div(v[y],64);
++    }
++}
++}
++extern "C" void xenon_h264_reconstruct_cpu(const XenonH264Job* j){
++    for(int plane=0;plane<3;++plane){
++        const int side=plane?8:16,w=plane?j->width/2:j->width,h=plane?j->height/2:j->height;
++        const int divisor=plane?8:4,dx=floor_div(j->mv_x,divisor),dy=floor_div(j->mv_y,divisor);
++        const int fx=j->mv_x-dx*divisor,fy=j->mv_y-dy*divisor;
++        const int16_t* coeff=j->coefficients+(plane?256+(plane-1)*64:0);
++        for(int by=0;by<side;by+=4)for(int bx=0;bx<side;bx+=4){int residual[16];
++            residual4(coeff+by*side+bx,side,residual);
++            for(int y=0;y<4;++y)for(int x=0;x<4;++x){
++                int sx=j->mb_x*side+bx+x+dx,sy=j->mb_y*side+by+y+dy,pred;
++                const uint8_t* ref=j->reference[plane];int stride=j->reference_stride[plane];
++                if(!plane)pred=luma(ref,stride,w,h,sx,sy,fx,fy);
++                else pred=((8-fx)*(8-fy)*pixel(ref,stride,w,h,sx,sy)+fx*(8-fy)*pixel(ref,stride,w,h,sx+1,sy)+
++                           (8-fx)*fy*pixel(ref,stride,w,h,sx,sy+1)+fx*fy*pixel(ref,stride,w,h,sx+1,sy+1)+32)/64;
++                j->destination[plane][(by+y)*j->destination_stride[plane]+bx+x]=(uint8_t)clip(pred+residual[y*4+x]);
++            }
++        }
++    }
++}
++extern "C" void xenon_h264_bridge_init(XenonH264Bridge* bridge,const XenonH264Backend* backend){
++    memset(bridge,0,sizeof(*bridge));bridge->magic=0x58483236;
++    if(backend)bridge->backend=*backend;
++}
++extern "C" void xenon_h264_bridge_flush(XenonH264Bridge* bridge){
++    if(!bridge||bridge->magic!=0x58483236||!bridge->count)return;
++    unsigned count=bridge->count;int success=0;++bridge->batches;
++    if(bridge->backend.execute)success=bridge->backend.execute(bridge->backend.opaque,bridge->jobs,count);
++    if(success)bridge->gpu_jobs+=count;
++    else{
++        if(bridge->backend.execute)++bridge->backend_failures;
++        for(unsigned i=0;i<count;++i)xenon_h264_reconstruct_cpu(&bridge->jobs[i]);
++        bridge->cpu_jobs+=count;
++    }
++    bridge->count=0;
++}
+diff --git a/experiments/h264_gpu/hybrid_jobs.h b/experiments/h264_gpu/hybrid_jobs.h
+new file mode 100644
+index 0000000..2bd6e7d
+--- /dev/null
++++ b/experiments/h264_gpu/hybrid_jobs.h
+@@ -0,0 +1,51 @@
++#ifndef OPENNOW_HYBRID_JOBS_H
++#define OPENNOW_HYBRID_JOBS_H
++#include <stdint.h>
++#include <stddef.h>
++
++/* The first backend accelerates progressive, unweighted list-0 16x16 inter
++ * macroblocks with 4x4 transforms. Other syntax remains FFmpeg CPU work.
++ * Jobs never outlive a reconstruction barrier (intra, row/filter, slice/error).
++ * CPU reference pictures remain authoritative, making fallback lossless. */
++enum { XENON_H264_BATCH_MAX=80, XENON_H264_WIDTH_MAX=1280 };
++typedef struct XenonH264Job {
++    const uint8_t* reference[3];
++    int reference_stride[3];
++    uint8_t* destination[3];
++    int destination_stride[3];
++    int width,height,mb_x,mb_y,mv_x,mv_y;
++    /* Raster planes of FFmpeg-layout transposed 4x4 dequantized blocks.
++       Chroma DC inverse-transform/dequantization has already been done. */
++    int16_t coefficients[384];
++} XenonH264Job;
++
++typedef struct XenonH264Backend {
++    void* opaque;
++    /* Must finish every job before returning. Zero means no valid output:
++       the bridge reconstructs ALL submitted jobs on CPU in that case. */
++    int (*execute)(void*,const XenonH264Job*,unsigned);
++    /* Invalidate uploaded references whenever a new picture starts. */
++    void (*begin_picture)(void*,int);
++} XenonH264Backend;
++
++typedef struct XenonH264Bridge {
++    uint32_t magic;
++    XenonH264Backend backend;
++    XenonH264Job jobs[XENON_H264_BATCH_MAX];
++    unsigned count;
++    int picture_number,have_picture;
++    uint64_t gpu_jobs,cpu_jobs,batches,backend_failures;
++} XenonH264Bridge;
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++void xenon_h264_bridge_init(XenonH264Bridge*,const XenonH264Backend*);
++void xenon_h264_bridge_flush(XenonH264Bridge*);
++void xenon_h264_reconstruct_cpu(const XenonH264Job*);
++/* Attach bridge using AVCodecContext.opaque only on a single-threaded
++ * experimental decoder. Do not reuse that opaque slot for another callback. */
++#ifdef __cplusplus
++}
++#endif
++#endif
+diff --git a/experiments/h264_gpu/shaders/reconstruct.hlsl b/experiments/h264_gpu/shaders/reconstruct.hlsl
+index 0c4c7e4..b7ad9ab 100644
+--- a/experiments/h264_gpu/shaders/reconstruct.hlsl
++++ b/experiments/h264_gpu/shaders/reconstruct.hlsl
+@@ -34,7 +34,12 @@ float readResidual(float2 p) { return tex2Dlod(residual,float4((p+0.5)/dimension
+ float clip8(float x) { return clamp(x,0,255); }
+ float sampleByte(float2 p, float list) {
+     // Native R32F validation resources store exact 0..255 values.
+-    return list==0 ? read0(p) : read1(p);
++    float v=list==0 ? read0(p) : read1(p);
++#ifdef GPU_REFERENCE_UNORM
++    return floor(v*255+0.5);
++#else
++    return v;
++#endif
+ }
+ float six(float a,float b,float c,float d,float e,float f) {
+     return a-5*b+20*c+20*d-5*e+f;
+@@ -140,6 +145,21 @@ float4 idct4_rows_ps(PIXEL_ARGS) : TARGET {
+     float4 v=transform4(c);
+     return clip8(read0(p)+floor((local.y==0?v.x:local.y==1?v.y:local.y==2?v.z:v.w)/64));
+ }
++float4 residual4_rows_ps(PIXEL_ARGS) : TARGET {
++    float2 p=floor(uv*dimensions.zw),base=floor(p/4)*4,local=p-base;
++    float4 c=float4(readResidual(base+float2(0,local.x)),readResidual(base+float2(1,local.x)),
++                    readResidual(base+float2(2,local.x)),readResidual(base+float2(3,local.x)));
++    float4 v=transform4(c);
++    return floor((local.y==0?v.x:local.y==1?v.y:local.y==2?v.z:v.w)/64);
++}
++float4 luma_batch_ps(PIXEL_ARGS,float4 jobMotion:TEXCOORD1) : TARGET {
++    float2 p=floor(uv*dimensions.zw);
++    return clip8(luma(p,jobMotion.xy,0)+readResidual(p));
++}
++float4 chroma_batch_ps(PIXEL_ARGS,float4 jobMotion:TEXCOORD1) : TARGET {
++    float2 p=floor(uv*dimensions.zw);
++    return clip8(chroma(p,jobMotion.xy,0)+readResidual(p));
++}
+ void transform8(float c[8],out float v[8]) {
+     float a0=c[0]+c[4],a2=c[0]-c[4],a4=floor(c[2]/2)-c[6],a6=floor(c[6]/2)+c[2];
+     float b0=a0+a6,b2=a2+a4,b4=a2-a4,b6=a0-a6;
+diff --git a/experiments/h264_gpu/xdk_backend.cpp b/experiments/h264_gpu/xdk_backend.cpp
+new file mode 100644
+index 0000000..2152578
+--- /dev/null
++++ b/experiments/h264_gpu/xdk_backend.cpp
+@@ -0,0 +1,146 @@
++#include "xdk_backend.h"
++#include <d3dx9.h>
++#include <cstdio>
++#include <cstring>
++#include <vector>
++
++namespace {
++template<class T>void release(T*& p){if(p){p->Release();p=NULL;}}
++uint64_t ticks(){LARGE_INTEGER t;QueryPerformanceCounter(&t);return (uint64_t)t.QuadPart;}
++struct Vertex {float x,y,z,w,u,v,mx,my,mz,mw;};
++void quad(Vertex* v,float left,float top,float right,float bottom,float mx,float my){
++    const float uv[6][2]={{left,top},{right,top},{left,bottom},{left,bottom},{right,top},{right,bottom}};
++    for(int i=0;i<6;++i){v[i].x=uv[i][0]*2-1;v[i].y=1-uv[i][1]*2;v[i].z=0;v[i].w=1;
++        v[i].u=uv[i][0];v[i].v=uv[i][1];v[i].mx=mx;v[i].my=my;v[i].mz=v[i].mw=0;}
++}
++bool load_shader(IDirect3DDevice9* d,const char* directory,const char* name,IDirect3DPixelShader9** out){
++    char path[512];sprintf(path,"%s\\%s.xpu",directory,name);
++    FILE* f=fopen(path,"rb");if(!f)return false;
++    fseek(f,0,SEEK_END);long size=ftell(f);rewind(f);
++    if(size<=0||size>1024*1024){fclose(f);return false;}
++    std::vector<DWORD> bytes((size+3)/4);
++    bool ok=fread(&bytes[0],1,size,f)==(size_t)size;fclose(f);
++    return ok&&SUCCEEDED(d->CreatePixelShader(&bytes[0],out));
++}
++struct RestoreTarget {
++    IDirect3DDevice9* device;IDirect3DSurface9* target;IDirect3DSurface9* depth;D3DVIEWPORT9 viewport;
++    RestoreTarget(IDirect3DDevice9* d):device(d),target(NULL),depth(NULL){d->GetRenderTarget(0,&target);d->GetDepthStencilSurface(&depth);d->GetViewport(&viewport);}
++    ~RestoreTarget(){device->SetTexture(0,NULL);device->SetTexture(1,NULL);device->SetTexture(2,NULL);
++        device->SetRenderTarget(0,target);device->SetDepthStencilSurface(depth);device->SetViewport(&viewport);release(target);release(depth);}
++};
++struct Scene {IDirect3DDevice9* d;Scene(IDirect3DDevice9* device):d(device){d->BeginScene();}~Scene(){d->EndScene();}};
++}
++XenonGpuReconstructor::XenonGpuReconstructor(IDirect3DDevice9* d):elapsed_ticks(0),upload_ticks(0),readback_ticks(0),successful_batches(0),
++    device_(d),vertex_(NULL),declaration_(NULL),columns_(NULL),rows_(NULL),luma_(NULL),chroma_(NULL),
++    coefficients_(NULL),intermediate_(NULL),residual_(NULL),output_(NULL),target_(NULL),reference_cursor_(0),ready_(false){if(d)d->AddRef();}
++XenonGpuReconstructor::~XenonGpuReconstructor(){
++    if(device_)device_->BlockUntilIdle();
++    for(int i=0;i<16;++i)release(refs_[i].texture);
++    release(target_);release(coefficients_);release(intermediate_);release(residual_);release(output_);
++    release(vertex_);release(declaration_);release(columns_);release(rows_);release(luma_);release(chroma_);release(device_);
++}
++bool XenonGpuReconstructor::initialize(const char* path){
++    if(!device_||ready_)return false;
++    if(!load_shader(device_,path,"idct4_columns_ps",&columns_)||!load_shader(device_,path,"residual4_rows_ps",&rows_)||
++       !load_shader(device_,path,"luma_batch_ps",&luma_)||!load_shader(device_,path,"chroma_batch_ps",&chroma_))return false;
++    const char* source="struct V{float4 p:POSITION0;float2 uv:TEXCOORD0;float4 mv:TEXCOORD1;};V main(V v){return v;}";
++    ID3DXBuffer* code=NULL,*errors=NULL;
++    HRESULT hr=D3DXCompileShader(source,(UINT)strlen(source),NULL,NULL,"main","vs_3_0",0,&code,&errors,NULL);
++    if(FAILED(hr)||!code){release(code);release(errors);return false;}
++    hr=device_->CreateVertexShader((DWORD*)code->GetBufferPointer(),&vertex_);release(code);release(errors);if(FAILED(hr))return false;
++    D3DVERTEXELEMENT9 decl[]={{0,0,D3DDECLTYPE_FLOAT4,D3DDECLMETHOD_DEFAULT,D3DDECLUSAGE_POSITION,0},
++      {0,16,D3DDECLTYPE_FLOAT2,D3DDECLMETHOD_DEFAULT,D3DDECLUSAGE_TEXCOORD,0},
++      {0,24,D3DDECLTYPE_FLOAT4,D3DDECLMETHOD_DEFAULT,D3DDECLUSAGE_TEXCOORD,1},D3DDECL_END()};
++    if(FAILED(device_->CreateVertexDeclaration(decl,&declaration_)))return false;
++    IDirect3DTexture9** textures[]={&coefficients_,&intermediate_,&residual_,&output_};
++    for(int i=0;i<4;++i)if(FAILED(device_->CreateTexture(1280,16,1,0,D3DFMT_LIN_R32F,D3DPOOL_DEFAULT,textures[i],NULL)))return false;
++    if(FAILED(device_->CreateRenderTarget(1280,16,D3DFMT_R32F,D3DMULTISAMPLE_NONE,0,FALSE,&target_,NULL)))return false;
++    ready_=true;return true;
++}
++XenonH264Backend XenonGpuReconstructor::callbacks(){XenonH264Backend b;b.opaque=this;b.execute=&execute_callback;b.begin_picture=&begin_callback;return b;}
++int XenonGpuReconstructor::execute_callback(void* p,const XenonH264Job* j,unsigned n){return ((XenonGpuReconstructor*)p)->execute(j,n)?1:0;}
++void XenonGpuReconstructor::begin_callback(void* p,int){((XenonGpuReconstructor*)p)->invalidate_references();}
++void XenonGpuReconstructor::invalidate_references(){for(int i=0;i<16;++i)refs_[i].identity=NULL;}
++IDirect3DTexture9* XenonGpuReconstructor::reference(const XenonH264Job& j,int plane){
++    const int w=plane?j.width/2:j.width,h=plane?j.height/2:j.height;
++    for(int i=0;i<16;++i)if(refs_[i].identity==j.reference[plane]&&refs_[i].width==w&&refs_[i].height==h&&refs_[i].stride==j.reference_stride[plane])return refs_[i].texture;
++    Reference& r=refs_[reference_cursor_++%16];
++    r.identity=NULL;
++    if(r.width!=w||r.height!=h){release(r.texture);r.width=w;r.height=h;}
++    if(!r.texture&&FAILED(device_->CreateTexture(w,h,1,0,D3DFMT_LIN_L8,D3DPOOL_DEFAULT,&r.texture,NULL)))return NULL;
++    uint64_t begin=ticks();D3DLOCKED_RECT lock;
++    if(FAILED(r.texture->LockRect(0,&lock,NULL,0)))return NULL;
++    for(int y=0;y<h;++y)memcpy((uint8_t*)lock.pBits+y*lock.Pitch,j.reference[plane]+y*j.reference_stride[plane],w);
++    r.texture->UnlockRect(0);upload_ticks+=ticks()-begin;r.identity=j.reference[plane];r.stride=j.reference_stride[plane];return r.texture;
++}
++bool XenonGpuReconstructor::draw(IDirect3DPixelShader9* shader,const void* vertices,unsigned vertex_count,IDirect3DTexture9* destination){
++    device_->SetPixelShader(shader);
++    HRESULT hr=device_->DrawPrimitiveUP(D3DPT_TRIANGLELIST,vertex_count/3,vertices,sizeof(Vertex));
++    if(FAILED(hr))return false;
++    if(destination)device_->Resolve(D3DRESOLVE_RENDERTARGET0,NULL,destination,NULL,0,0,NULL,1,0,NULL);
++    return true;
++}
++bool XenonGpuReconstructor::execute(const XenonH264Job* jobs,unsigned count){
++    if(!ready_||!jobs||!count||count>XENON_H264_BATCH_MAX)return false;
++    for(unsigned i=0;i<count;++i){const XenonH264Job& j=jobs[i];
++        if(j.width<=0||j.height<=0||j.width>1280||j.height>720||j.width%16||j.height%16)return false;
++        for(int p=0;p<3;++p)if(!j.reference[p]||!j.destination[p]||j.reference_stride[p]<(p?j.width/2:j.width)||j.destination_stride[p]<(p?8:16))return false;
++    }
++    const uint64_t begin=ticks();RestoreTarget restore(device_);Scene scene(device_);
++    device_->SetRenderTarget(0,target_);device_->SetDepthStencilSurface(NULL);
++    D3DVIEWPORT9 vp={0,0,1280,16,0,1};device_->SetViewport(&vp);
++    device_->SetVertexDeclaration(declaration_);device_->SetVertexShader(vertex_);
++    device_->SetRenderState(D3DRS_ZENABLE,FALSE);device_->SetRenderState(D3DRS_ALPHABLENDENABLE,FALSE);
++    device_->SetRenderState(D3DRS_ALPHATESTENABLE,FALSE);device_->SetRenderState(D3DRS_CULLMODE,D3DCULL_NONE);
++    device_->SetRenderState(D3DRS_SCISSORTESTENABLE,FALSE);
++    // Use native half-integer pixel centers, matching floor(uv * atlasSize).
++    device_->SetRenderState(D3DRS_HALFPIXELOFFSET,FALSE);
++    device_->SetRenderState(D3DRS_COLORWRITEENABLE,0xf);
++    for(unsigned s=0;s<3;++s){device_->SetSamplerState(s,D3DSAMP_MINFILTER,D3DTEXF_POINT);device_->SetSamplerState(s,D3DSAMP_MAGFILTER,D3DTEXF_POINT);
++        device_->SetSamplerState(s,D3DSAMP_MIPFILTER,D3DTEXF_NONE);device_->SetSamplerState(s,D3DSAMP_ADDRESSU,D3DTADDRESS_CLAMP);device_->SetSamplerState(s,D3DSAMP_ADDRESSV,D3DTADDRESS_CLAMP);
++    }
++    float params[16]={1280,720,1280,16};device_->SetPixelShaderConstantF(0,params,4);
++    Vertex full[6];quad(full,0,0,1,1,0,0);
++    for(int plane=0;plane<3;++plane){
++        const int side=plane?8:16;
++        D3DLOCKED_RECT lock;uint64_t start=ticks();
++        if(FAILED(coefficients_->LockRect(0,&lock,NULL,0)))return false;
++        for(int y=0;y<16;++y)memset((uint8_t*)lock.pBits+y*lock.Pitch,0,1280*sizeof(float));
++        for(unsigned i=0;i<count;++i){const int16_t* src=jobs[i].coefficients+(plane?256+(plane-1)*64:0);
++            for(int y=0;y<side;++y){float* row=(float*)((uint8_t*)lock.pBits+y*lock.Pitch)+i*side;
++                for(int x=0;x<side;++x)row[x]=(float)src[y*side+x];}}
++        coefficients_->UnlockRect(0);upload_ticks+=ticks()-start;
++        device_->SetTexture(0,NULL);device_->SetTexture(2,coefficients_);
++        if(!draw(columns_,full,6,intermediate_))return false;
++        device_->SetTexture(2,intermediate_);
++        if(!draw(rows_,full,6,residual_))return false;
++        device_->SetTexture(2,residual_);
++        // Group independent output quads by reference; one draw per group.
++        bool done[XENON_H264_BATCH_MAX]={};
++        for(unsigned first=0;first<count;++first){if(done[first])continue;
++            IDirect3DTexture9* ref=reference(jobs[first],plane);if(!ref)return false;
++            params[0]=(float)(plane?jobs[first].width/2:jobs[first].width);params[1]=(float)(plane?jobs[first].height/2:jobs[first].height);
++            device_->SetPixelShaderConstantF(0,params,4);device_->SetTexture(0,ref);
++            Vertex vertices[XENON_H264_BATCH_MAX*6];unsigned n=0;
++            for(unsigned i=first;i<count;++i){if(done[i]||jobs[i].reference[plane]!=jobs[first].reference[plane])continue;
++                if(jobs[i].width!=jobs[first].width||jobs[i].height!=jobs[first].height||jobs[i].reference_stride[plane]!=jobs[first].reference_stride[plane])return false;
++                const int units=plane?8:4;
++                float mx=(float)(jobs[i].mv_x+(jobs[i].mb_x-(int)i)*side*units);
++                float my=(float)(jobs[i].mv_y+jobs[i].mb_y*side*units);
++                quad(vertices+n,(float)(i*side)/1280,0,(float)((i+1)*side)/1280,(float)side/16,mx,my);n+=6;done[i]=true;
++            }
++            if(!draw(plane?chroma_:luma_,vertices,n,NULL))return false;
++        }
++        device_->SetTexture(0,NULL);device_->SetTexture(2,NULL);
++        device_->Resolve(D3DRESOLVE_RENDERTARGET0,NULL,output_,NULL,0,0,NULL,1,0,NULL);
++        start=ticks();
++        if(FAILED(output_->LockRect(0,&lock,NULL,D3DLOCK_READONLY)))return false;
++        bool valid=true;
++        for(unsigned i=0;i<count;++i)for(int y=0;y<side;++y){const float* row=(const float*)((const uint8_t*)lock.pBits+y*lock.Pitch)+i*side;
++            uint8_t* dst=jobs[i].destination[plane]+y*jobs[i].destination_stride[plane];
++            for(int x=0;x<side;++x){const float v=row[x];if(!(v>=0&&v<=255)||(float)(int)v!=v){valid=false;break;}dst[x]=(uint8_t)v;}}
++        output_->UnlockRect(0);readback_ticks+=ticks()-start;
++        if(!valid){ready_=false;return false;}
++    }
++    elapsed_ticks+=ticks()-begin;++successful_batches;return true;
++}
+diff --git a/experiments/h264_gpu/xdk_backend.h b/experiments/h264_gpu/xdk_backend.h
+new file mode 100644
+index 0000000..9b0951d
+--- /dev/null
++++ b/experiments/h264_gpu/xdk_backend.h
+@@ -0,0 +1,38 @@
++#pragma once
++#include <xtl.h>
++#include <d3d9.h>
++#include "hybrid_jobs.h"
++
++/* Standalone decoder/device owner only. Production presentation concurrency
++ * must be integrated and profiled before sharing this device with the app. */
++class XenonGpuReconstructor {
++public:
++    explicit XenonGpuReconstructor(IDirect3DDevice9*);
++    ~XenonGpuReconstructor();
++    bool initialize(const char* shader_directory);
++    XenonH264Backend callbacks();
++    uint64_t elapsed_ticks,upload_ticks,readback_ticks,successful_batches;
++private:
++    XenonGpuReconstructor(const XenonGpuReconstructor&);
++    XenonGpuReconstructor& operator=(const XenonGpuReconstructor&);
++    struct Reference {
++        const uint8_t* identity;
++        int width,height,stride;
++        IDirect3DTexture9* texture;
++        Reference():identity(NULL),width(0),height(0),stride(0),texture(NULL){}
++    } refs_[16];
++    IDirect3DDevice9* device_;
++    IDirect3DVertexShader9* vertex_;
++    IDirect3DVertexDeclaration9* declaration_;
++    IDirect3DPixelShader9* columns_,*rows_,*luma_,*chroma_;
++    IDirect3DTexture9* coefficients_,*intermediate_,*residual_,*output_;
++    IDirect3DSurface9* target_;
++    unsigned reference_cursor_;
++    bool ready_;
++    static int execute_callback(void*,const XenonH264Job*,unsigned);
++    static void begin_callback(void*,int);
++    bool execute(const XenonH264Job*,unsigned);
++    IDirect3DTexture9* reference(const XenonH264Job&,int);
++    bool draw(IDirect3DPixelShader9*,const void*,unsigned,IDirect3DTexture9*);
++    void invalidate_references();
++};
+diff --git a/experiments/h264_gpu/xdk_validate.cpp b/experiments/h264_gpu/xdk_validate.cpp
+new file mode 100644
+index 0000000..e2352c5
+--- /dev/null
++++ b/experiments/h264_gpu/xdk_validate.cpp
+@@ -0,0 +1,95 @@
++// Standalone CPU-vs-hybrid decoder comparison. Never launches the OpenNOW app.
++#define __STDC_CONSTANT_MACROS
++#include <xtl.h>
++#include <d3d9.h>
++#include <cstdio>
++#include <cstring>
++#include <vector>
++#include "xdk_backend.h"
++extern "C" {
++#include "libavcodec/avcodec.h"
++#include "libavutil/mem.h"
++extern AVCodec ff_h264_decoder;
++extern AVCodecParser ff_h264_parser;
++}
++
++namespace {
++FILE* log_file=NULL;
++uint64_t tick(){LARGE_INTEGER t;QueryPerformanceCounter(&t);return(uint64_t)t.QuadPart;}
++bool same_frame(const AVFrame* a,const AVFrame* b){
++    if(a->width!=b->width||a->height!=b->height||a->format!=b->format)return false;
++    if(a->format!=AV_PIX_FMT_YUV420P&&a->format!=AV_PIX_FMT_YUVJ420P)return false;
++    for(int plane=0;plane<3;++plane){int w=plane?(a->width+1)/2:a->width,h=plane?(a->height+1)/2:a->height;
++        for(int y=0;y<h;++y)if(memcmp(a->data[plane]+y*a->linesize[plane],b->data[plane]+y*b->linesize[plane],w))return false;
++    }return true;
++}
++AVCodecContext* decoder(XenonH264Bridge* bridge){
++    AVCodecContext* c=avcodec_alloc_context3(&ff_h264_decoder);if(!c)return NULL;
++    c->thread_count=1;c->thread_type=0;c->skip_loop_filter=AVDISCARD_DEFAULT;c->opaque=bridge;
++    if(avcodec_open2(c,&ff_h264_decoder,NULL)<0){av_free(c);return NULL;}return c;
++}
++bool packet(AVCodecContext* cpu,AVCodecContext* gpu,AVFrame* a,AVFrame* b,uint8_t* data,int size,
++            unsigned& frames,uint64_t& cpu_ticks,uint64_t& gpu_ticks){
++    AVPacket p;av_init_packet(&p);p.data=data;p.size=size;int have_a=0,have_b=0;
++    uint64_t begin=tick();int rc_a=avcodec_decode_video2(cpu,a,&have_a,&p);cpu_ticks+=tick()-begin;
++    begin=tick();int rc_b=avcodec_decode_video2(gpu,b,&have_b,&p);gpu_ticks+=tick()-begin;
++    if(rc_a<0||rc_b<0||have_a!=have_b){fprintf(log_file,"FAIL decode cpu=%d gpu=%d output=%d/%d\n",rc_a,rc_b,have_a,have_b);return false;}
++    if(have_a){++frames;if(!same_frame(a,b)){fprintf(log_file,"FAIL pixels frame=%u\n",frames);return false;}}
++    return true;
++}
++}
++int main(){
++    log_file=fopen("game:\\gpu-validation.log","wb");if(!log_file)return 1;
++    fprintf(log_file,"GPU H264 standalone validation; full CPU intra/deblocking, bounded GPU inter batches\n");fflush(log_file);
++    IDirect3D9* api=Direct3DCreate9(D3D_SDK_VERSION);IDirect3DDevice9* device=NULL;
++    D3DPRESENT_PARAMETERS pp;memset(&pp,0,sizeof(pp));pp.BackBufferWidth=1280;pp.BackBufferHeight=720;
++    pp.BackBufferFormat=D3DFMT_A8R8G8B8;pp.FrontBufferFormat=D3DFMT_LE_X8R8G8B8;
++    pp.BackBufferCount=1;pp.MultiSampleType=D3DMULTISAMPLE_NONE;pp.SwapEffect=D3DSWAPEFFECT_DISCARD;pp.PresentationInterval=D3DPRESENT_INTERVAL_IMMEDIATE;
++    if(!api||FAILED(api->CreateDevice(0,D3DDEVTYPE_HAL,NULL,D3DCREATE_HARDWARE_VERTEXPROCESSING,&pp,&device))){fprintf(log_file,"FAIL device\n");fclose(log_file);if(api)api->Release();return 1;}
++    int result=1;
++    {
++        XenonGpuReconstructor backend(device);
++        if(!backend.initialize("game:")){fprintf(log_file,"FAIL shader/texture/target initialization\n");}
++        else {
++            FILE* file=fopen("game:\\gpu-fixture.h264","rb");
++            if(!file)fprintf(log_file,"FAIL missing gpu-fixture.h264\n");
++            else{
++                fseek(file,0,SEEK_END);long length=ftell(file);rewind(file);
++                if(length<=0||length>16*1024*1024)fprintf(log_file,"FAIL fixture size outside 1..16MiB\n");
++                else{
++                    std::vector<uint8_t> input(length+FF_INPUT_BUFFER_PADDING_SIZE,0);
++                    bool ok=fread(&input[0],1,length,file)==(size_t)length;
++                    avcodec_register(&ff_h264_decoder);av_register_codec_parser(&ff_h264_parser);
++                    XenonH264Backend callbacks=backend.callbacks();
++                    XenonH264Bridge* bridge=new XenonH264Bridge;xenon_h264_bridge_init(bridge,&callbacks);
++                    AVCodecContext* cpu=decoder(NULL),*gpu=decoder(bridge);
++                    AVCodecParserContext* parser=av_parser_init(AV_CODEC_ID_H264);
++                    AVFrame* a=avcodec_alloc_frame(),*b=avcodec_alloc_frame();
++                    unsigned frames=0;uint64_t cpu_ticks=0,gpu_ticks=0;
++                    ok=ok&&cpu&&gpu&&parser&&a&&b;
++                    int offset=0;
++                    while(ok&&offset<length){uint8_t* data=NULL;int size=0;
++                        int consumed=av_parser_parse2(parser,cpu,&data,&size,&input[0]+offset,length-offset,AV_NOPTS_VALUE,AV_NOPTS_VALUE,offset);
++                        if(consumed<0||(!consumed&&!size)){ok=false;break;}
++                        offset+=consumed;
++                        if(size){std::vector<uint8_t> padded(size+FF_INPUT_BUFFER_PADDING_SIZE,0);memcpy(&padded[0],data,size);
++                            ok=packet(cpu,gpu,a,b,&padded[0],size,frames,cpu_ticks,gpu_ticks);}
++                    }
++                    if(ok){uint8_t* data=NULL;int size=0;av_parser_parse2(parser,cpu,&data,&size,NULL,0,AV_NOPTS_VALUE,AV_NOPTS_VALUE,offset);
++                        if(size){std::vector<uint8_t> padded(size+FF_INPUT_BUFFER_PADDING_SIZE,0);memcpy(&padded[0],data,size);ok=packet(cpu,gpu,a,b,&padded[0],size,frames,cpu_ticks,gpu_ticks);}}
++                    for(int i=0;ok&&i<16;++i){unsigned before=frames;ok=packet(cpu,gpu,a,b,NULL,0,frames,cpu_ticks,gpu_ticks);if(frames==before)break;}
++                    xenon_h264_bridge_flush(bridge);
++                    LARGE_INTEGER frequency;QueryPerformanceFrequency(&frequency);
++                    fprintf(log_file,"frames=%u cpu_ticks=%llu hybrid_ticks=%llu frequency=%llu gpu_jobs=%llu cpu_replay=%llu batches=%llu backend_failures=%llu upload_ticks=%llu readback_ticks=%llu\n",
++                        frames,cpu_ticks,gpu_ticks,(uint64_t)frequency.QuadPart,bridge->gpu_jobs,bridge->cpu_jobs,bridge->batches,bridge->backend_failures,backend.upload_ticks,backend.readback_ticks);
++                    if(ok&&frames&&bridge->gpu_jobs&&!bridge->backend_failures){fprintf(log_file,"PASS exact visible YUV frames; inspect timing separately\n");result=0;}
++                    else fprintf(log_file,"FAIL comparison, empty fixture, or GPU work not successfully exercised\n");
++                    if(parser)av_parser_close(parser);av_free(a);av_free(b);
++                    if(cpu){avcodec_close(cpu);av_free(cpu);}if(gpu){avcodec_close(gpu);av_free(gpu);}delete bridge;
++                }
++                fclose(file);
++            }
++        }
++    }
++    device->Release();api->Release();fclose(log_file);return result;
++}
+diff --git a/xdk/deps-src/xbmc360/libraries/ffmpeg/libavcodec/h264.c b/xdk/deps-src/xbmc360/libraries/ffmpeg/libavcodec/h264.c
+index dcbe697..3898458 100644
+--- a/xdk/deps-src/xbmc360/libraries/ffmpeg/libavcodec/h264.c
++++ b/xdk/deps-src/xbmc360/libraries/ffmpeg/libavcodec/h264.c
+@@ -2403,12 +2403,24 @@ static av_always_inline void hl_decode_mb_idct_luma(H264Context *h, int mb_type,
+ #define SIMPLE 0
+ #include "h264_mb_template.c"
+ 
++#ifdef OPENNOW_GPU_RECON_EXPERIMENT
++extern int ff_xenon_h264_submit(H264Context *h);
++extern void ff_xenon_h264_barrier(H264Context *h);
++#endif
++
+ void ff_h264_hl_decode_mb(H264Context *h)
+ {
+     const int mb_xy   = h->mb_xy;
+     const int mb_type = h->cur_pic.f.mb_type[mb_xy];
+     int is_complex    = CONFIG_SMALL || h->is_complex || IS_INTRA_PCM(mb_type) || h->qscale == 0;
+ 
++#ifdef OPENNOW_GPU_RECON_EXPERIMENT
++    if (ff_xenon_h264_submit(h))
++        return;
++    /* Intra prediction may read a preceding inter MB in the same row. */
++    ff_xenon_h264_barrier(h);
++#endif
++
+     if (CHROMA444) {
+         if (is_complex || h->pixel_shift)
+             hl_decode_mb_444_complex(h);
+@@ -4119,6 +4131,11 @@ static void loop_filter(H264Context *h, int start_x, int end_x)
+     const int pixel_shift    = h->pixel_shift;
+     const int block_h        = 16 >> h->chroma_y_shift;
+ 
++#ifdef OPENNOW_GPU_RECON_EXPERIMENT
++    /* Pixels must exist before deblocking and before row progress is published. */
++    ff_xenon_h264_barrier(h);
++#endif
++
+     if (h->deblocking_filter) {
+         for (mb_x = start_x; mb_x < end_x; mb_x++)
+             for (mb_y = end_mb_y - FRAME_MBAFF; mb_y <= end_mb_y; mb_y++) {
+@@ -4226,6 +4243,10 @@ static void decode_finish_row(H264Context *h)
+ static void er_add_slice(H264Context *h, int startx, int starty,
+                          int endx, int endy, int status)
+ {
++#ifdef OPENNOW_GPU_RECON_EXPERIMENT
++    /* Includes parse failures: don't leave jobs pointing into released frames. */
++    ff_xenon_h264_barrier(h);
++#endif
+     if (CONFIG_ERROR_RESILIENCE) {
+         ERContext *er = &h->er;
+ 
