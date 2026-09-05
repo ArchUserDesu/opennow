@@ -77,6 +77,12 @@ static int agent_socket_recv(Agent* agent, Address* addr, uint8_t* buf, int len)
 
   tv.tv_sec = 0;
   tv.tv_usec = AGENT_POLL_TIMEOUT * 1000;
+#ifdef _XBOX
+  // The caller holds the peer lock also used by input and presentation's
+  // control pump. Never wait for network readiness while holding that lock
+  // once ICE is established; the network worker sleeps outside it when idle.
+  if (agent->selected_pair) tv.tv_usec = 0;
+#endif
   FD_ZERO(&rfds);
 
   for (i = 0; i < sizeof(addr_type) / sizeof(addr_type[0]); i++) {

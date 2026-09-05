@@ -123,7 +123,14 @@ void WebRtcSession::video_loop(){
             if(decoded_frames_==1||decoded_frames_%120==0)ON_LOGI("video-perf","decoded frame=%llu decode_ms=%llu queue_wait_ms=%llu compressed=%u present_drops=%llu buffer_reuse=%llu/%llu",decoded_frames_,(done-began)/1000ULL,queue_wait_ms,(unsigned)unit.data.size(),video_present_drops_,video_buffer_reuses_,video_buffer_allocations_);
         }else{
             EnterCriticalSection(&frame_cs_);recycle_video_frame_locked(f);LeaveCriticalSection(&frame_cs_);
-            if(decode_result==VideoDecodeNoFrame)++video_decode_no_frame_;else if(decode_result==VideoDecodeError){++video_decode_failures_;if(!unit.idr)request_keyframe_async();}
+            if(decode_result==VideoDecodeNoFrame)++video_decode_no_frame_;else if(decode_result==VideoDecodeError){
+                ++video_decode_failures_;
+                EnterCriticalSection(&video_cs_);
+                video_queue_drops_+=pending_video_units_.size();clear_video_queue_locked();
+                waiting_video_keyframe_=true;
+                LeaveCriticalSection(&video_cs_);
+                request_keyframe_async();
+            }
         }
         EnterCriticalSection(&video_cs_);recycle_video_buffer(unit.data);LeaveCriticalSection(&video_cs_);
     }
@@ -261,13 +268,27 @@ void WebRtcSession::on_video(const PeerVideoPacket&p){if(!decoder_||!p.data||!p.
 #if defined(OPENNOW_XDK)
     EnterCriticalSection(&video_cs_);
 #endif
-    /* Congestion is not decoder corruption. The old path discarded every
-       non-IDR after one stale queue event, turning a temporary overload into
-       multi-second decode blackouts. Keep feeding the decoder while the
-       rate-limited PLI is pending. */
+    // Once a reference AU is lost, hold the last good displayed picture.
+    // Feeding dependent P pictures after trimming produces reference damage.
+    if(waiting_video_keyframe_&&!idr){
+        ++video_queue_drops_;request_keyframe_async();
+#if defined(OPENNOW_XDK)
+        LeaveCriticalSection(&video_cs_);
+#endif
+        return;
+    }
     if(idr&&!pending_video_units_.empty()){video_queue_drops_+=pending_video_units_.size();clear_video_queue_locked();}
     const std::size_t max_queued=max_video_queue_units();const std::uint64_t oldest_age_us=!pending_video_units_.empty()&&queued_at>=pending_video_units_.front().enqueued_us?queued_at-pending_video_units_.front().enqueued_us:0;const bool stale=oldest_age_us>=67000ULL;const bool full=pending_video_units_.size()>=max_queued;
-    if(stale||full){unsigned dropped=0;do{std::vector<std::uint8_t>old;old.swap(pending_video_units_.front().data);pending_video_units_.pop_front();recycle_video_buffer(old);++video_queue_drops_;++dropped;if(pending_video_units_.empty())break;const std::uint64_t age=queued_at>=pending_video_units_.front().enqueued_us?queued_at-pending_video_units_.front().enqueued_us:0;if(age<34000ULL&&pending_video_units_.size()<max_queued)break;}while(true);if(stale)++video_queue_stale_events_;request_keyframe_async();static unsigned backlog_events=0;++backlog_events;if(backlog_events<=8||backlog_events%50==0)ON_LOGW("video-queue","live-edge trim event=%u reason=%s dropped_now=%u dropped_total=%llu oldest_ms=%llu remaining=%u max_units=%u current_idr=%d",backlog_events,stale?"stale":"count",dropped,video_queue_drops_,oldest_age_us/1000ULL,(unsigned)pending_video_units_.size(),(unsigned)max_queued,idr?1:0);}
+    if(stale||full){
+        video_queue_drops_+=pending_video_units_.size()+1;clear_video_queue_locked();
+        if(stale)++video_queue_stale_events_;
+        waiting_video_keyframe_=true;request_keyframe_async();
+        ON_LOGW("video-queue","reference recovery reason=%s oldest_ms=%llu dropped_total=%llu",stale?"stale":"count",oldest_age_us/1000ULL,video_queue_drops_);
+#if defined(OPENNOW_XDK)
+        LeaveCriticalSection(&video_cs_);
+#endif
+        return;
+    }
     if(idr)waiting_video_keyframe_=false;std::vector<std::uint8_t>buffer;if(!video_buffer_pool_.empty()){buffer.swap(video_buffer_pool_.back());video_buffer_pool_.pop_back();++video_buffer_reuses_;}else ++video_buffer_allocations_;buffer.resize(p.size);std::memcpy(&buffer[0],p.data,p.size);pending_video_units_.push_back(QueuedVideoUnit());QueuedVideoUnit&unit=pending_video_units_.back();unit.data.swap(buffer);unit.enqueued_us=queued_at;unit.idr=idr;if(pending_video_units_.size()>video_queue_high_water_)video_queue_high_water_=pending_video_units_.size();
 #if defined(OPENNOW_XDK)
     LeaveCriticalSection(&video_cs_);SetEvent(video_event_);

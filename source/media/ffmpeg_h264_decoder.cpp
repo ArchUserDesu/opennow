@@ -117,8 +117,8 @@ public:
 
 #if defined(OPENNOW_XDK)
         /* FFmpeg frame threading pipelines complete H.264 frames. Start with
-           two workers: one extra frame of decode latency and the smallest
-           useful overlap on Xenon. LOW_DELAY must remain clear or FFmpeg 1.2
+           three workers, one per physical Xenon core, matching Switch's
+           software worker count. LOW_DELAY must remain clear or FFmpeg 1.2
            will silently refuse FF_THREAD_FRAME. */
         const int requested_thread_count=3;
         const int requested_thread_type=FF_THREAD_FRAME;
@@ -184,6 +184,7 @@ public:
         if(rc==AVERROR(EAGAIN)||rc==AVERROR_EOF){++no_frame_count_;if(no_frame_count_<=4||no_frame_count_%300==0)ON_LOGI("video-decode","packet accepted without output submitted=%llu no_frame=%llu frames=%llu packet_bytes=%u",submitted_count_,no_frame_count_,decoded_count_,(unsigned)size);return VideoDecodeNoFrame;}
         if(rc<0){++error_count_;ON_LOGE("video-decode","receive frame failed rc=%d packet_bytes=%u submitted=%llu errors=%llu",rc,(unsigned)size,submitted_count_,error_count_);return VideoDecodeError;}
 #endif
+        if(frame_->decode_error_flags){++error_count_;ON_LOGW("video-decode","discarding damaged output flags=%d submitted=%llu",frame_->decode_error_flags,submitted_count_);return VideoDecodeError;}
         ++decoded_count_; out.width=frame_->width;out.height=frame_->height;out.pts=frame_->pts;const std::uint64_t copy_began=decoder_now_us();
         if(decoded_count_<=4||decoded_count_%300==0){
             ON_LOGI("video-frame","decoded=%llu submitted=%llu no_frame=%llu errors=%llu coded_bytes=%u actual=%dx%d format=%d linesize=%d,%d,%d range=%s",decoded_count_,submitted_count_,no_frame_count_,error_count_,(unsigned)size,frame_->width,frame_->height,frame_->format,frame_->linesize[0],frame_->linesize[1],frame_->linesize[2],frame_->format==AV_PIX_FMT_YUVJ420P?"full":"limited");

@@ -203,9 +203,15 @@ int ports_resolve_addr(const char* host, Address* addr) {
 }
 
 uint32_t ports_get_epoch_time() {
+#ifdef _XBOX
+  // This API drives elapsed-time deadlines (RTP reorder, ICE, DTLS, SCTP).
+  // Use one monotonic millisecond clock, with unsigned wrap-safe subtraction.
+  return (uint32_t)GetTickCount();
+#else
   struct timeval tv;
   gettimeofday(&tv, NULL);
   return (uint32_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+#endif
 }
 
 void ports_sleep_ms(int ms) {

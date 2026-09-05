@@ -31,6 +31,10 @@ unsigned long long g_sequence = 0;
 std::uint64_t g_started = 0;
 #elif defined(OPENNOW_XDK)
 DWORD g_started = 0;
+HANDLE g_writer = NULL, g_wake = NULL;
+volatile LONG g_stopping = 0;
+char g_records[256][1280];
+unsigned g_read = 0, g_count = 0, g_dropped = 0;
 #endif
 
 const char* level_name(LogLevel level) {
@@ -79,6 +83,32 @@ unsigned long elapsed_ms() {
 #endif
 }
 
+#if defined(OPENNOW_XDK)
+DWORD WINAPI write_log(LPVOID) {
+    for (;;) {
+        WaitForSingleObject(g_wake, 250);
+        for (;;) {
+            char record[1280];
+            lock_log();
+            const bool have = g_count != 0;
+            if (have) {
+                std::memcpy(record, g_records[g_read], sizeof(record));
+                g_read = (g_read + 1) % 256;
+                --g_count;
+            }
+            const bool done = g_stopping != 0 && !g_count;
+            unlock_log();
+            if (have) std::fputs(record, g_file);
+            if (!have || done) {
+                std::fflush(g_file);
+                if (done) return 0;
+                break;
+            }
+        }
+    }
+}
+#endif
+
 } // namespace
 
 bool log_init() {
@@ -110,11 +140,18 @@ bool log_init() {
     }
     const bool opened = g_file != NULL;
     if (opened) {
-        std::setvbuf(g_file, NULL, _IOLBF, 0);
+        std::setvbuf(g_file, NULL, _IOFBF, 16384);
         std::fprintf(g_file, "OpenNOW-Xenon persistent diagnostic log\n");
         std::fprintf(g_file, "Log format: sequence elapsed-ms level component message\n");
         std::fprintf(g_file, "Secrets, authorization headers, and request bodies are intentionally omitted.\n");
         std::fflush(g_file);
+#if defined(OPENNOW_XDK)
+        g_read = g_count = g_dropped = 0;
+        g_stopping = 0;
+        g_wake = CreateEvent(NULL, FALSE, FALSE, NULL);
+        if (g_wake) g_writer = CreateThread(NULL, 32768, write_log, NULL, 0, NULL);
+        if (g_writer) SetThreadPriority(g_writer, THREAD_PRIORITY_BELOW_NORMAL);
+#endif
     }
     unlock_log();
     if (opened) {
@@ -126,8 +163,20 @@ bool log_init() {
 }
 
 void log_close() {
+#if defined(OPENNOW_XDK)
+    if (g_writer) {
+        InterlockedExchange(&g_stopping, 1);
+        SetEvent(g_wake);
+        WaitForSingleObject(g_writer, INFINITE);
+        CloseHandle(g_writer); g_writer = NULL;
+    }
+    if (g_wake) { CloseHandle(g_wake); g_wake = NULL; }
+#endif
     lock_log();
     if (g_file) {
+#if defined(OPENNOW_XDK)
+        std::fprintf(g_file, "logger: dropped diagnostic records=%u\n", g_dropped);
+#endif
         std::fprintf(g_file, "%06llu +%010lums INFO  logger: closing persistent log\n",
                      ++g_sequence, elapsed_ms());
         std::fflush(g_file);
@@ -157,6 +206,23 @@ void log_message(LogLevel level, const char* component, const char* format, ...)
     lock_log();
     const unsigned long long sequence = ++g_sequence;
     const unsigned long elapsed = elapsed_ms();
+#if defined(OPENNOW_XDK)
+    if (g_writer) {
+        // Disk/debug output never runs on the network, audio or codec threads.
+        // Bound diagnostics memory; overload drops logs, never media packets.
+        if (!g_stopping && g_count < 256) {
+            char* record = g_records[(g_read + g_count) % 256];
+            _snprintf(record, 1279, "%06llu +%010lums %s %s: %s\n",
+                      sequence, elapsed, level_name(level),
+                      component ? component : "general", message);
+            record[1279] = '\0';
+            ++g_count;
+            if(level==LogFatal) SetEvent(g_wake);
+        } else ++g_dropped;
+        unlock_log();
+        return;
+    }
+#endif
     std::printf("[%06llu +%lums %s %s] %s\n", sequence, elapsed,
                 level_name(level), component ? component : "general", message);
     if (g_file) {

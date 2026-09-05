@@ -27,6 +27,10 @@
 #include "h264chroma_template.c"
 #undef BIT_DEPTH
 
+#ifdef _XBOX
+#include "xbox360/h264chroma_xenon.h"
+#endif
+
 #define SET_CHROMA(depth)                                                   \
     c->put_h264_chroma_pixels_tab[0] = put_h264_chroma_mc8_ ## depth ## _c; \
     c->put_h264_chroma_pixels_tab[1] = put_h264_chroma_mc4_ ## depth ## _c; \
@@ -53,4 +57,7 @@ void ff_h264chroma_init(H264ChromaContext *c, int bit_depth)
         ff_h264chroma_init_sh4(c, bit_depth);
     if (ARCH_X86)
         ff_h264chroma_init_x86(c, bit_depth);
+#ifdef _XBOX
+    xenon_chroma_init(c, bit_depth);
+#endif
 }

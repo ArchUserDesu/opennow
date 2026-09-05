@@ -74,9 +74,15 @@ extern "C" int usleep(unsigned int usec) {
 extern "C" int gettimeofday(struct timeval* tv, void* tz) {
     (void)tz;
     if (!tv) return -1;
-    const time_t now = time(NULL);
-    tv->tv_sec = (long)now;
-    tv->tv_usec = (long)((GetTickCount() % 1000u) * 1000u);
+    // Both fields must come from the same clock sample. Combining time()
+    // seconds with uptime's remainder jumps backwards at every uptime second.
+    FILETIME ft;
+    ULARGE_INTEGER ticks;
+    GetSystemTimeAsFileTime(&ft);
+    ticks.LowPart=ft.dwLowDateTime;ticks.HighPart=ft.dwHighDateTime;
+    const unsigned __int64 unix_us=(ticks.QuadPart-116444736000000000ULL)/10ULL;
+    tv->tv_sec=(long)(unix_us/1000000ULL);
+    tv->tv_usec=(long)(unix_us%1000000ULL);
     return 0;
 }
 

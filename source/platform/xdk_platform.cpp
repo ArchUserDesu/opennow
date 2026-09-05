@@ -35,6 +35,9 @@ LPDIRECT3DDEVICE9 g_device = NULL;
 LPDIRECT3DTEXTURE9 g_frame_texture = NULL;
 LPDIRECT3DTEXTURE9 g_y_texture = NULL;
 LPDIRECT3DTEXTURE9 g_uv_texture = NULL;
+LPDIRECT3DTEXTURE9 g_v_texture = NULL;
+LPDIRECT3DTEXTURE9 g_yuv_textures[3][3] = {{NULL}};
+unsigned g_yuv_slot = 0;
 LPDIRECT3DVERTEXSHADER9 g_video_vs = NULL;
 LPDIRECT3DPIXELSHADER9 g_video_ps = NULL;
 LPDIRECT3DPIXELSHADER9 g_video_yuv_ps = NULL;
@@ -89,8 +92,11 @@ void release_rgb_texture() {
     g_texture_width = g_texture_height = 0;
 }
 void release_yuv_textures() {
-    if (g_y_texture) { g_y_texture->Release(); g_y_texture = NULL; }
-    if (g_uv_texture) { g_uv_texture->Release(); g_uv_texture = NULL; }
+    for (unsigned slot=0;slot<3;++slot) for (unsigned plane=0;plane<3;++plane) {
+        if (g_yuv_textures[slot][plane]) g_yuv_textures[slot][plane]->Release();
+        g_yuv_textures[slot][plane]=NULL;
+    }
+    g_y_texture=g_uv_texture=g_v_texture=NULL;
     g_yuv_width = g_yuv_height = 0;
 }
 
@@ -105,18 +111,30 @@ bool ensure_video_texture(UINT width, UINT height) {
 }
 
 bool ensure_yuv_textures(UINT width, UINT height) {
-    if (g_y_texture && g_uv_texture && g_yuv_width == width && g_yuv_height == height) return true;
+    if (g_y_texture && g_yuv_width == width && g_yuv_height == height) {
+        g_yuv_slot=(g_yuv_slot+1)%3;
+        g_y_texture=g_yuv_textures[g_yuv_slot][0];
+        g_uv_texture=g_yuv_textures[g_yuv_slot][1];
+        g_v_texture=g_yuv_textures[g_yuv_slot][2];
+        return true;
+    }
     release_yuv_textures();
     if (!g_device) return false;
-    HRESULT y_hr = g_device->CreateTexture(width, height, 1, 0, D3DFMT_LIN_A8R8G8B8,
-                                           D3DPOOL_DEFAULT, &g_y_texture, NULL);
-    const UINT chroma_width=(width+1)/2,chroma_height=(height+1)/2;
-    HRESULT uv_hr = SUCCEEDED(y_hr) ? g_device->CreateTexture(chroma_width, chroma_height, 1, 0,
-                                           D3DFMT_LIN_A8R8G8B8, D3DPOOL_DEFAULT, &g_uv_texture, NULL) : E_FAIL;
-    if (FAILED(y_hr) || FAILED(uv_hr) || !g_y_texture || !g_uv_texture) {
-        ON_LOGE("xdk-video", "YUV texture creation failed y=0x%08x uv=0x%08x size=%ux%u",(unsigned)y_hr,(unsigned)uv_hr,width,height);
-        release_yuv_textures();return false;
+    // LIN_L8 has GPUENDIAN_NONE: one source byte is one luminance texel,
+    // independent of Xenon's native word order. Rotate upload storage so
+    // LockRect need not wait for the immediately preceding draw's textures.
+    for(unsigned slot=0;slot<3;++slot) for(unsigned plane=0;plane<3;++plane) {
+        HRESULT hr=g_device->CreateTexture(plane?(width+1)/2:width,
+            plane?(height+1)/2:height,1,0,D3DFMT_LIN_L8,D3DPOOL_DEFAULT,
+            &g_yuv_textures[slot][plane],NULL);
+        if(FAILED(hr)) {
+            ON_LOGE("xdk-video","L8 texture creation failed hr=0x%08x",(unsigned)hr);
+            release_yuv_textures();return false;
+        }
     }
+    g_yuv_slot=0;
+    g_y_texture=g_yuv_textures[0][0];g_uv_texture=g_yuv_textures[0][1];g_v_texture=g_yuv_textures[0][2];
+    ON_LOGI("xdk-video","native L8 YUV upload size=%ux%u slots=3 bytes_per_frame=%u",width,height,width*height+2*((width+1)/2)*((height+1)/2));
     g_yuv_width=width;g_yuv_height=height;return true;
 }
 
@@ -139,13 +157,18 @@ bool upload_yuv(const VideoFrame&f) {
     else if(!has_plane_bytes(f.plane[1],f.stride[1],ch,cw*2))return false;
     if(!ensure_yuv_textures((UINT)width,(UINT)height))return false;
 
-    D3DLOCKED_RECT yr;ZeroMemory(&yr,sizeof(yr));if(FAILED(g_y_texture->LockRect(0,&yr,NULL,0)))return false;
-    for(int y=0;y<height;++y){const std::uint8_t*src=&f.plane[0][0]+(std::size_t)y*f.stride[0];DWORD*dst=(DWORD*)(static_cast<BYTE*>(yr.pBits)+(std::size_t)y*yr.Pitch);for(int x=0;x<width;++x){const DWORD yy=src[x];dst[x]=0xff000000u|(yy<<16)|(yy<<8)|yy;}}
-    g_y_texture->UnlockRect(0);
-
-    D3DLOCKED_RECT uvr;ZeroMemory(&uvr,sizeof(uvr));if(FAILED(g_uv_texture->LockRect(0,&uvr,NULL,0)))return false;
-    for(int y=0;y<ch;++y){const std::uint8_t*u=planar?(&f.plane[1][0]+(std::size_t)y*f.stride[1]):NULL;const std::uint8_t*v=planar?(&f.plane[2][0]+(std::size_t)y*f.stride[2]):NULL;const std::uint8_t*uv=nv12?(&f.plane[1][0]+(std::size_t)y*f.stride[1]):NULL;DWORD*dst=(DWORD*)(static_cast<BYTE*>(uvr.pBits)+(std::size_t)y*uvr.Pitch);for(int x=0;x<cw;++x){const DWORD uu=planar?u[x]:uv[x*2];const DWORD vv=planar?v[x]:uv[x*2+1];dst[x]=0xff000000u|(uu<<16)|(vv<<8);}}
-    g_uv_texture->UnlockRect(0);
+    for(int plane=0;plane<3;++plane) {
+        LPDIRECT3DTEXTURE9 texture=g_yuv_textures[g_yuv_slot][plane];
+        D3DLOCKED_RECT r;ZeroMemory(&r,sizeof(r));
+        if(FAILED(texture->LockRect(0,&r,NULL,0)))return false;
+        const int rows=plane?ch:height,bytes=plane?cw:width;
+        for(int y=0;y<rows;++y) {
+            BYTE*dst=static_cast<BYTE*>(r.pBits)+(std::size_t)y*r.Pitch;
+            if(planar||plane==0) std::memcpy(dst,&f.plane[plane][0]+(std::size_t)y*f.stride[plane],bytes);
+            else {const BYTE*src=&f.plane[1][0]+(std::size_t)y*f.stride[1];for(int x=0;x<bytes;++x)dst[x]=src[2*x+plane-1];}
+        }
+        texture->UnlockRect(0);
+    }
     set_yuv_shader_constants(f.format==PixelFormat_YUV420P_FULL);g_frame_is_yuv=true;return true;
 }
 
@@ -171,13 +194,20 @@ bool draw_current_texture(float x, float y, float w, float h) {
     if (FAILED(clear_hr)||FAILED(begin_hr)) { ON_LOGE("xdk-video","frame begin failed clear=0x%08x begin=0x%08x",(unsigned)clear_hr,(unsigned)begin_hr); return false; }
     g_device->SetTexture(0,g_frame_is_yuv?g_y_texture:g_frame_texture);
     g_device->SetTexture(1,g_frame_is_yuv?g_uv_texture:NULL);
+    g_device->SetTexture(2,g_frame_is_yuv?g_v_texture:NULL);
     g_device->SetRenderState(D3DRS_ALPHABLENDENABLE,FALSE);
     g_device->SetSamplerState(0,D3DSAMP_MINFILTER,D3DTEXF_LINEAR);
     g_device->SetSamplerState(0,D3DSAMP_MAGFILTER,D3DTEXF_LINEAR);
     if(g_frame_is_yuv){g_device->SetSamplerState(1,D3DSAMP_MINFILTER,D3DTEXF_LINEAR);g_device->SetSamplerState(1,D3DSAMP_MAGFILTER,D3DTEXF_LINEAR);}
+    for(unsigned sampler=0;sampler<3;++sampler){
+        g_device->SetSamplerState(sampler,D3DSAMP_ADDRESSU,D3DTADDRESS_CLAMP);
+        g_device->SetSamplerState(sampler,D3DSAMP_ADDRESSV,D3DTADDRESS_CLAMP);
+    }
+    g_device->SetSamplerState(2,D3DSAMP_MINFILTER,D3DTEXF_LINEAR);
+    g_device->SetSamplerState(2,D3DSAMP_MAGFILTER,D3DTEXF_LINEAR);
     g_device->SetVertexDeclaration(g_video_decl); g_device->SetVertexShader(g_video_vs); g_device->SetPixelShader(g_frame_is_yuv?g_video_yuv_ps:g_video_ps);
     HRESULT hr = g_device->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP,2,v,sizeof(ScreenVertex));
-    g_device->SetTexture(0,NULL);g_device->SetTexture(1,NULL);
+    g_device->SetTexture(0,NULL);g_device->SetTexture(1,NULL);g_device->SetTexture(2,NULL);
     if(SUCCEEDED(hr)&&!g_stream_overlay.empty())draw_stream_overlay_in_scene();
     HRESULT end_hr=g_device->EndScene();
     if (FAILED(hr)) return false;
@@ -189,7 +219,7 @@ bool draw_current_texture(float x, float y, float w, float h) {
 bool init_video_shaders() {
     static const char* vs="struct I{float4 p:POSITION0;float4 c:COLOR0;float2 uv:TEXCOORD0;};struct O{float4 p:POSITION0;float4 c:COLOR0;float2 uv:TEXCOORD0;};O main(I i){O o;o.p=i.p;o.c=i.c;o.uv=i.uv;return o;}";
     static const char* ps="sampler2D s0:register(s0);float4 main(float2 uv:TEXCOORD0,float4 c:COLOR0):COLOR0{return tex2D(s0,uv)*c;}";
-    static const char* yuv_ps="sampler2D sy:register(s0);sampler2D suv:register(s1);float4 m0:register(c0);float4 m1:register(c1);float4 m2:register(c2);float4 main(float2 uv:TEXCOORD0,float4 c:COLOR0):COLOR0{float y=tex2D(sy,uv).r;float2 q=tex2D(suv,uv).rg;float4 p=float4(y,q.x,q.y,1.0);float3 rgb=float3(dot(p,m0),dot(p,m1),dot(p,m2));return float4(saturate(rgb),1.0)*c;}";
+    static const char* yuv_ps="sampler2D sy:register(s0);sampler2D su:register(s1);sampler2D sv:register(s2);float4 m0:register(c0);float4 m1:register(c1);float4 m2:register(c2);float4 main(float2 uv:TEXCOORD0,float4 c:COLOR0):COLOR0{float4 p=float4(tex2D(sy,uv).r,tex2D(su,uv).r,tex2D(sv,uv).r,1.0);float3 rgb=float3(dot(p,m0),dot(p,m1),dot(p,m2));return float4(saturate(rgb),1.0)*c;}";
     LPD3DXBUFFER code=NULL, errors=NULL; HRESULT hr=D3DXCompileShader(vs,(UINT)strlen(vs),NULL,NULL,"main","vs_2_0",0,&code,&errors,NULL);
     if(FAILED(hr)||!code){ON_LOGE("xdk-video","vertex shader compile failed hr=0x%08x detail=%s",(unsigned)hr,errors?(const char*)errors->GetBufferPointer():"none");if(errors)errors->Release();return false;}
     hr=g_device->CreateVertexShader((DWORD*)code->GetBufferPointer(),&g_video_vs);code->Release();if(errors){errors->Release();errors=NULL;}if(FAILED(hr)){ON_LOGE("xdk-video","CreateVertexShader failed hr=0x%08x",(unsigned)hr);return false;}
@@ -304,6 +334,7 @@ bool init_audio() {
 }
 
 bool init_network() {
+    ON_LOGI("boot","stream runtime=monotonic-clock/native-yuv/async-log build=%s %s",__DATE__,__TIME__);
     XNetStartupParams p; ZeroMemory(&p,sizeof(p)); p.cfgSizeOfStruct=sizeof(p); p.cfgFlags=XNET_STARTUP_BYPASS_SECURITY;
     INT rc=XNetStartup(&p); if(rc){ON_LOGE("xdk-net","XNetStartup failed rc=%d",rc);return false;}
     WSADATA wsa; ZeroMemory(&wsa,sizeof(wsa)); rc=WSAStartup(MAKEWORD(2,2),&wsa); if(rc){ON_LOGE("xdk-net","WSAStartup failed rc=%d",rc);XNetCleanup();return false;}
