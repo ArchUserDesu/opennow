@@ -7,3 +7,13 @@ xdk/lib/Release/
 *.exe
 *.pe
 *.lib
+*.log
+*.tmp
+*.pdb
+*.ilk
+*.exp
+*.map
+__pycache__/
+*.py[cod]
+launch.ini*
+opennow_session.json
